@@ -436,6 +436,20 @@ class NoMoreTargets(CinderException):
     pass
 
 
+class InvalidTransition(CinderException):
+    """Raised when an invalid state transition is attempted."""
+    message = _("Unable to transition from %(existing_state)s"
+                " to %(desired_state)s.")
+
+    @property
+    def existing_state(self):
+        return self.kwargs['existing_state']
+
+    @property
+    def desired_state(self):
+        return self.kwargs['desired_state']
+
+
 class QuotaError(CinderException):
     message = _("Quota exceeded: code=%(code)s")
     code = 413
