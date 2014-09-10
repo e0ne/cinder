@@ -18,7 +18,7 @@ import os
 
 from oslo.config import cfg
 
-from cinder.brick.remotefs import remotefs as remotefs_brick
+from oslo.stogare.remotefs import remotefs as remotefs_brick
 from cinder import exception
 from cinder.i18n import _
 from cinder.image import image_utils

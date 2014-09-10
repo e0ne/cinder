@@ -19,7 +19,7 @@ import sys
 if sys.platform == 'win32':
     import wmi
 
-from cinder.brick.remotefs import remotefs
+from oslo.stogare.remotefs import remotefs
 from cinder import exception
 from cinder.openstack.common.gettextutils import _
 from cinder.openstack.common import log as logging

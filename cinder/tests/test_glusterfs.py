@@ -27,8 +27,8 @@ from mox import IgnoreArg
 from mox import IsA
 from mox import stubout
 from oslo.config import cfg
-
-from cinder import brick
+import oslo.stogare as brick
+# from cinder import brick
 from cinder import compute
 from cinder import context
 from cinder import db

@@ -34,8 +34,8 @@ from stevedore import extension
 from taskflow.engines.action_engine import engine
 
 from cinder.backup import driver as backup_driver
-from cinder.brick.iscsi import iscsi
-from cinder.brick.local_dev import lvm as brick_lvm
+from oslo.stogare.iscsi import iscsi
+from oslo.stogare.local_dev import lvm as brick_lvm
 from cinder import context
 from cinder import db
 from cinder import exception

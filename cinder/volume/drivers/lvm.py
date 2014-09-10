@@ -23,9 +23,9 @@ import os
 import socket
 
 from oslo.config import cfg
+from oslo.stogare import exception as brick_exception
+from oslo.stogare.local_dev import lvm as lvm
 
-from cinder.brick import exception as brick_exception
-from cinder.brick.local_dev import lvm as lvm
 from cinder import exception
 from cinder.i18n import _
 from cinder.image import image_utils
