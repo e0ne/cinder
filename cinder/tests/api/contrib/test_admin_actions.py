@@ -17,7 +17,7 @@ from oslo.config import cfg
 import webob
 
 from cinder.api.contrib import admin_actions
-from oslo.stogare.local_dev import lvm as brick_lvm
+from oslo.storage.local_dev import lvm as brick_lvm
 from cinder import context
 from cinder import db
 from cinder import exception

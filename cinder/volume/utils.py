@@ -20,7 +20,7 @@ import math
 from Crypto.Random import random
 from oslo.config import cfg
 
-from oslo.stogare.local_dev import lvm as brick_lvm
+from oslo.storage.local_dev import lvm as brick_lvm
 from cinder import exception
 from cinder.i18n import _
 from cinder.openstack.common import log as logging

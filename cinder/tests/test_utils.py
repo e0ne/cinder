@@ -26,8 +26,8 @@ import paramiko
 import six
 
 import cinder
-from oslo.stogare.initiator import connector
-from oslo.stogare.initiator import linuxfc
+from oslo.storage.initiator import connector
+from oslo.storage.initiator import linuxfc
 from cinder import exception
 from cinder.openstack.common import processutils as putils
 from cinder.openstack.common import timeutils

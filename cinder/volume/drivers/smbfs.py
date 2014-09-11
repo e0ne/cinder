@@ -18,7 +18,7 @@ import re
 
 from oslo.config import cfg
 
-from oslo.stogare.remotefs import remotefs
+from oslo.storage.remotefs import remotefs
 from cinder import exception
 from cinder.image import image_utils
 from cinder.openstack.common.gettextutils import _

@@ -16,7 +16,7 @@
 import os
 import re
 
-from oslo.stogare.iscsi import iscsi
+from oslo.storage.iscsi import iscsi
 from cinder import exception
 from cinder.i18n import _
 from cinder.openstack.common import log as logging

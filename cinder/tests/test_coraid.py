@@ -18,7 +18,7 @@ import math
 
 import mox
 from oslo.config import cfg
-from oslo.stogare.initiator import connector
+from oslo.storage.initiator import connector
 
 from cinder import exception
 from cinder.image import image_utils

@@ -23,8 +23,8 @@ import os
 import socket
 
 from oslo.config import cfg
-from oslo.stogare import exception as brick_exception
-from oslo.stogare.local_dev import lvm as lvm
+from oslo.storage import exception as brick_exception
+from oslo.storage.local_dev import lvm as lvm
 
 from cinder import exception
 from cinder.i18n import _

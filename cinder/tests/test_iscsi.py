@@ -18,7 +18,7 @@ import shutil
 import string
 import tempfile
 
-from oslo.stogare.iscsi import iscsi
+from oslo.storage.iscsi import iscsi
 from cinder import test
 from cinder.volume import driver
 

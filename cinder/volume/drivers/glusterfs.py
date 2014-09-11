@@ -19,7 +19,7 @@ import stat
 import time
 
 from oslo.config import cfg
-from oslo.stogare.remotefs import remotefs as remotefs_brick
+from oslo.storage.remotefs import remotefs as remotefs_brick
 
 from cinder import compute
 from cinder import db

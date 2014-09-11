@@ -14,7 +14,7 @@
 
 from cinder.i18n import _
 from cinder.openstack.common import log as logging
-from oslo.stogare.tests.fake_lvm import FakeBrickLVM
+from oslo.storage.tests.fake_lvm import FakeBrickLVM
 from cinder.volume import driver
 from cinder.volume.drivers import lvm
 from cinder.zonemanager import utils as fczm_utils
