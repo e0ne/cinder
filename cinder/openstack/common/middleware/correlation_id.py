@@ -1,4 +1,4 @@
-# Copyright (c) 2012 Intel Corporation.
+# Copyright (c) 2013 Rackspace Hosting
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -13,25 +13,19 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""
-UUID related utilities and helper functions.
-"""
+"""Middleware that attaches a correlation id to WSGI request"""
 
 import uuid
 
+from cinder.openstack.common.middleware import base
+from cinder.openstack.common import versionutils
 
-def generate_uuid():
-    return str(uuid.uuid4())
 
+@versionutils.deprecated(as_of=versionutils.deprecated.JUNO,
+                         in_favor_of='oslo.middleware.CorrelationId')
+class CorrelationIdMiddleware(base.Middleware):
 
-def is_uuid_like(val):
-    """Returns validation of a value as a UUID.
-
-    For our purposes, a UUID is a canonical form string:
-    aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
-
-    """
-    try:
-        return str(uuid.UUID(val)) == val
-    except (TypeError, ValueError, AttributeError):
-        return False
+    def process_request(self, req):
+        correlation_id = (req.headers.get("X_CORRELATION_ID") or
+                          str(uuid.uuid4()))
+        req.headers['X_CORRELATION_ID'] = correlation_id

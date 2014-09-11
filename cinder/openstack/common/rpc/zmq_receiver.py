@@ -1,5 +1,4 @@
-# Copyright (c) 2012 Intel Corporation.
-# All Rights Reserved.
+#    Copyright 2011 OpenStack Foundation
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -13,25 +12,27 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""
-UUID related utilities and helper functions.
-"""
+import eventlet
+eventlet.monkey_patch()
 
-import uuid
+import contextlib
+import sys
+
+from oslo.config import cfg
+
+from cinder.openstack.common import log as logging
+from cinder.openstack.common import rpc
+from cinder.openstack.common.rpc import impl_zmq
+
+CONF = cfg.CONF
+CONF.register_opts(rpc.rpc_opts)
+CONF.register_opts(impl_zmq.zmq_opts)
 
 
-def generate_uuid():
-    return str(uuid.uuid4())
+def main():
+    CONF(sys.argv[1:], project='oslo')
+    logging.setup("oslo")
 
-
-def is_uuid_like(val):
-    """Returns validation of a value as a UUID.
-
-    For our purposes, a UUID is a canonical form string:
-    aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
-
-    """
-    try:
-        return str(uuid.UUID(val)) == val
-    except (TypeError, ValueError, AttributeError):
-        return False
+    with contextlib.closing(impl_zmq.ZmqProxy(CONF)) as reactor:
+        reactor.consume_in_thread()
+        reactor.wait()
