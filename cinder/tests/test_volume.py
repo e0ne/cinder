@@ -50,7 +50,7 @@ from cinder.openstack.common import units
 import cinder.policy
 from cinder import quota
 from cinder import test
-from cinder.tests.brick.fake_lvm import FakeBrickLVM
+from oslo.storage.fake_lvm import FakeBrickLVM
 from cinder.tests import conf_fixture
 from cinder.tests import fake_driver
 from cinder.tests import fake_notifier
