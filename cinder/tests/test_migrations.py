@@ -722,6 +722,30 @@ class MigrationsMixin(test_migrations.WalkVersionsMixin):
         snapshots = db_utils.get_table(engine, 'snapshots')
         self.assertNotIn('provider_id', snapshots.c)
 
+    def _check_037(self, engine, data):
+        self.assertTrue(engine.dialect.has_table(engine.connect(),
+                                                 'micro_states'))
+        micro_states = db_utils.get_table(engine, 'micro_states')
+        self.assertIsInstance(micro_states.c.created_at.type,
+                              self.TIME_TYPE)
+        self.assertIsInstance(micro_states.c.updated_at.type,
+                              self.TIME_TYPE)
+        self.assertIsInstance(micro_states.c.deleted_at.type,
+                              self.TIME_TYPE)
+        self.assertIsInstance(micro_states.c.deleted.type,
+                              self.BOOL_TYPE)
+        self.assertIsInstance(micro_states.c.id.type,
+                              sqlalchemy.types.VARCHAR)
+        self.assertIsInstance(micro_states.c.resource_id.type,
+                              sqlalchemy.types.VARCHAR)
+        self.assertIsInstance(micro_states.c.state.type,
+                              sqlalchemy.types.VARCHAR)
+
+
+    def _post_downgrade_037(self, engine):
+        self.assertFalse(engine.dialect.has_table(engine.connect(),
+                                                  'micro_states'))
+
     def test_walk_versions(self):
         self.walk_versions(True, False)
 
