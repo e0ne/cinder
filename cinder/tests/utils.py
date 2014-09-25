@@ -58,7 +58,15 @@ def create_volume(ctxt,
     vol['replication_extended_status'] = replication_extended_status
     vol['replication_driver_data'] = replication_driver_data
 
-    return db.volume_create(ctxt, vol)
+    volume = db.volume_create(ctxt, vol)
+    micro_states_properties = {
+        'volume_id': volume.id,
+        'state': 'entry_create',
+    }
+
+    db.volume_micro_state_create(ctxt, micro_states_properties)
+
+    return volume
 
 
 def create_snapshot(ctxt,

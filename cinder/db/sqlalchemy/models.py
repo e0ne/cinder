@@ -547,6 +547,18 @@ class Transfer(BASE, CinderBase):
                           'Transfer.deleted == False)')
 
 
+class VolumeMicroState(BASE, CinderBase):
+    """Represents a volume transfer request."""
+    __tablename__ = 'volume_micro_state'
+    id = Column(String(36), primary_key=True)
+    volume_id = Column(String(36), ForeignKey('volumes.id'))
+    state = Column(String(255), nullable=True)
+    volume = relationship(Volume, backref="VolumeMicroState",
+                          foreign_keys=volume_id,
+                          primaryjoin=
+                          'VolumeMicroState.volume_id == Volume.id')
+
+
 def register_models():
     """Register Models and create metadata.
 
@@ -566,7 +578,8 @@ def register_models():
               VolumeTypes,
               VolumeGlanceMetadata,
               ConsistencyGroup,
-              Cgsnapshot
+              Cgsnapshot,
+              VolumeMicroState
               )
     engine = create_engine(CONF.database.connection, echo=False)
     for model in models:

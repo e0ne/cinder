@@ -190,29 +190,36 @@ VOLUME_TRANSITIONS.extend((VOLUME_AVAILABLE, x)
 # Don't allow any further modifications...
 VOLUME_TRANSITIONS = frozenset(VOLUME_TRANSITIONS)
 
+"""
+Fetch the state from state transition manager stored in DB, Redis,
+Zookeeper, etc storage backends. Based on the well-defined set of
+rules a decision is made whether a particular state transition is
+allowed or not and which operation takes precedence over another one.
+"""
 
-def check_volume_transition(volume, new_state, quiet=False):
-    """Check that a volume can transition from old to new.
+VOLUME_CREATE_MICROSTATE_EXTRACT_VOLUME_REQUEST = 'extract_volume_request'
+VOLUME_CREATE_MICROSTATE_ENTRY_CREATE = 'entry_create'
+VOLUME_CREATE_MICROSTATE_QUOTA_RESERVE = 'quota_reserve'
+VOLUME_CREATE_MICROSTATE_QUOTA_COMMIT = 'quota_commit'
+VOLUME_CREATE_MICROSTATE_VOLUME_CAST = 'volume_cast'
+VOLUME_CREATE_MICROSTATE_DELETED = 'deleted'
 
-    If transition can be performed, it returns True. If transition
-    should be ignored, it returns False. If transition is not
-    valid, it raises a InvalidTransition exception (if quiet is True then
-    the exception is *not* raised and a warning is written to the LOG
-    instead and True is returned).
-    """
-    try:
-        return _check_transition(volume['status'], new_state,
-                                 VOLUME_TRANSITIONS,
-                                 VOLUME_STATES,
-                                 identity_ignored=True)
-    except (ValueError, excp.InvalidTransition) as e:
-        if quiet:
-            LOG.warn(_("Invalid/unknown 'volume' state transition attempted:"
-                       " %(details)s"), {'details': e})
-            return True
-        else:
-            raise
+VOLUME_CREATE_STATES = (
+    VOLUME_CREATE_MICROSTATE_EXTRACT_VOLUME_REQUEST,
+    VOLUME_CREATE_MICROSTATE_QUOTA_RESERVE,
+    VOLUME_CREATE_MICROSTATE_ENTRY_CREATE,
+    VOLUME_CREATE_MICROSTATE_QUOTA_COMMIT,
+    VOLUME_CREATE_MICROSTATE_VOLUME_CAST,
+    VOLUME_CREATE_MICROSTATE_DELETED,
+)
 
+# The allowed state transition
+VOLUME_CREATE_MICROSTATE_TRANSITIONS = frozenset([
+    (VOLUME_CREATE_MICROSTATE_ENTRY_CREATE,
+     VOLUME_CREATE_MICROSTATE_QUOTA_COMMIT),
+    (VOLUME_CREATE_MICROSTATE_QUOTA_COMMIT,
+     VOLUME_CREATE_MICROSTATE_VOLUME_CAST),
+])
 
 # All the known 'migration' *substates* & transitions that are allowed.
 #
@@ -248,31 +255,6 @@ MIGRATION_TRANSITIONS = frozenset([
     (MIGRATION_MIGRATING, MIGRATION_STARTING),
 ])
 
-
-def check_migration_transition(volume, new_state, quiet=False):
-    """Check that a volume *migration* can transition.
-
-    If transition can be performed, it returns True. If transition
-    should be ignored, it returns False. If transition is not
-    valid, it raises a InvalidTransition exception (if quiet is True then
-    the exception is *not* raised and a warning is written to the LOG
-    instead and True is returned).
-    """
-    migration_status = volume['migration_status']
-    try:
-        return _check_transition_prefixed(migration_status, new_state,
-                                          MIGRATION_TRANSITIONS,
-                                          MIGRATION_STATES,
-                                          identity_ignored=True)
-    except (ValueError, excp.InvalidTransition) as e:
-        if quiet:
-            LOG.warn(_("Invalid/unknown 'migration' state transition"
-                       " attempted: %(details)s"), {'details': e})
-            return True
-        else:
-            raise
-
-
 # All the known 'attach' *substates* & transitions that are allowed.
 #
 # NOTE(harlowja): this should also be akin to a nested state-machine since
@@ -289,9 +271,20 @@ ATTACH_TRANSITIONS = frozenset([
     (ATTACH_DETACHED, ATTACH_ATTACHED),
 ])
 
+transition_states_map = {'attach': [ATTACH_TRANSITIONS, ATTACH_STATES],
+                         'volume_micro_states':
+                             [VOLUME_CREATE_MICROSTATE_TRANSITIONS,
+                              VOLUME_CREATE_STATES],
+                         'migration': [MIGRATION_TRANSITIONS,
+                                       MIGRATION_STATES],
+                         'volume': [VOLUME_TRANSITIONS, VOLUME_STATES]}
 
-def check_attach_transition(volume, new_state, quiet=False):
-    """Check that a volume *attach* can transition.
+
+# Verify if the state transition is allowed from previous state to new state
+def validate_transition(state,
+                        new_state, key,
+                        quiet=False):
+    """Check that a volume create microstate can transition.
 
     If transition can be performed, it returns True. If transition
     should be ignored, it returns False. If transition is not
@@ -299,12 +292,11 @@ def check_attach_transition(volume, new_state, quiet=False):
     the exception is *not* raised and a warning is written to the LOG
     instead and True is returned).
     """
-    attach_status = volume['attach_status']
     try:
-        return _check_transition(attach_status, new_state,
-                                 ATTACH_TRANSITIONS,
-                                 ATTACH_STATES,
-                                 identity_ignored=True)
+        return _check_transition_prefixed(state, new_state,
+                                          transition_states_map[key][0],
+                                          transition_states_map[key][1],
+                                          identity_ignored=True)
     except (ValueError, excp.InvalidTransition) as e:
         if quiet:
             LOG.warn(_("Invalid/unknown 'attach' state transition attempted:"

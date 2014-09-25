@@ -14,6 +14,7 @@
 from oslo_config import cfg
 from oslo_utils import timeutils
 from oslo_utils import units
+import six
 import taskflow.engines
 from taskflow.patterns import linear_flow
 from taskflow.types import failure as ft
@@ -26,6 +27,7 @@ from cinder import policy
 from cinder import quota
 from cinder import utils
 from cinder.volume.flows import common
+from cinder.volume import states
 from cinder.volume import volume_types
 
 LOG = logging.getLogger(__name__)
@@ -454,7 +456,8 @@ class EntryCreateTask(flow_utils.CinderTask):
     Reversion strategy: remove the volume_id created from the database.
     """
 
-    default_provides = set(['volume_properties', 'volume_id', 'volume'])
+    default_provides = set(['volume_properties', 'volume_id', 'volume',
+                           'volume_micro_state'])
 
     def __init__(self, db):
         requires = ['availability_zone', 'description', 'metadata',
@@ -494,6 +497,19 @@ class EntryCreateTask(flow_utils.CinderTask):
         volume_properties.update(kwargs)
         volume = self.db.volume_create(context, volume_properties)
 
+        vol_id = volume['id']
+        micro_states_properties = {
+            'volume_id': vol_id,
+            'state': 'entry_create',
+        }
+        try:
+            micro_state = self.db.volume_micro_state_create(
+                context, micro_states_properties)
+        except exception.MicroStatesRecordExists as e:
+            LOG.exception(_LE("Failed create microstate: %s"),
+                          six.text_type(e))
+            raise
+
         return {
             'volume_id': volume['id'],
             'volume_properties': volume_properties,
@@ -506,6 +522,7 @@ class EntryCreateTask(flow_utils.CinderTask):
             # resolve the serialization & recreation of this object since raw
             # sqlalchemy objects can't be serialized.
             'volume': volume,
+            'volume_micro_state': micro_state,
         }
 
     def revert(self, context, result, optional_args, **kwargs):
@@ -519,6 +536,8 @@ class EntryCreateTask(flow_utils.CinderTask):
             return
         vol_id = result['volume_id']
         try:
+            # TODO(e0ne): make it in a single DB transaction
+            self.db.volume_micro_states_destroy(context.elevated(), vol_id)
             self.db.volume_destroy(context.elevated(), vol_id)
         except exception.CinderException:
             # We are already reverting, therefore we should silence this
@@ -548,7 +567,8 @@ class QuotaReserveTask(flow_utils.CinderTask):
     def __init__(self):
         super(QuotaReserveTask, self).__init__(addons=[ACTION])
 
-    def execute(self, context, size, volume_type_id, optional_args):
+    def execute(self, context, size, volume_type_id,
+                optional_args):
         try:
             reserve_opts = {'volumes': 1, 'gigabytes': size}
             QUOTAS.add_volume_type_opts(context, reserve_opts, volume_type_id)
@@ -629,14 +649,44 @@ class QuotaCommitTask(flow_utils.CinderTask):
     an automated or manual process.
     """
 
-    def __init__(self):
+    def __init__(self, db):
         super(QuotaCommitTask, self).__init__(addons=[ACTION])
+        self.db = db
+
+    def _pre_execute(self, volume_micro_state):
+        new_state = 'quota_commit'
+        key = 'volume_micro_states'
+        is_ok = states.validate_transition(volume_micro_state['state'],
+                                           new_state, key)
+        if(is_ok):
+            pass
+        """
+        TODO : Add logic to retry, revert, gracefully exit in case
+        of failure. Failure can be because of several reason one
+        primary reason being the state transition is not allowed.
+        As of now we need to decide whether its a transitive failure
+        (which can be recovered from after few retries) or a fatal failure
+        in which case we do not execute further. Since the volume_micro_state
+        is stored persistently we can revert to previous state if needed
+        gived the ability to point in time restart but for this the first
+        call at the start of the task should be to get/verify
+        the volume_micro_state.
+        """
+
+    # NOTE (vilobhmm): State Machine Update
+    def _post_execute(self, context, volume_micro_state):
+        volume_micro_state['state'] = 'quota_commit'
+        self.db.volume_micro_state_update(context,
+                                          volume_micro_state['volume_id'],
+                                          volume_micro_state)
 
     def execute(self, context, reservations, volume_properties,
-                optional_args):
+                optional_args, volume_micro_state):
+        self._pre_execute(volume_micro_state)
         QUOTAS.commit(context, reservations)
         # updating is_quota_committed attribute of optional_args dictionary
         optional_args['is_quota_committed'] = True
+        self._post_execute(context, volume_micro_state)
         return {'volume_properties': volume_properties}
 
     def revert(self, context, result, **kwargs):
@@ -740,13 +790,49 @@ class VolumeCastTask(flow_utils.CinderTask):
                 source_replicaid=source_replicaid,
                 consistencygroup_id=group_id)
 
-    def execute(self, context, **kwargs):
+    def _pre_execute(self, volume_micro_state):
+        new_state = 'volume_cast'
+        """Here key is the table name. Depending on the table used
+        and the db object used it will be the reposonsibility of
+        the developer to make sure to pass proper field which can
+        get us the 'state' details. For example
+        'state'            in volume_micro_state table
+        'migration_status' in migration table,
+        'status'           in volumes table and so on"""
+        key = 'volume_micro_states'
+        is_ok = states.validate_transition(volume_micro_state['state'],
+                                           new_state, key)
+        if(is_ok):
+            pass
+        """
+        TODO : Add logic to retry, revert, gracefully exit in case
+        of failure. Failure can be because of several reason one
+        primary reason being the state transition is not allowed.
+        As of now we need to decide whether its a transitive failure
+        (which can be recovered from after few retries) or a fatal failure
+        in which case we do not execute further. Since the volume_micro_state
+        is stored persistently we can revert to previous state if needed
+        gived the ability to point in time restart but for this the first
+        call at the start of the task should be to get/verify
+        the volume_micro_state.
+        """
+
+    # NOTE (vilobhmm): State Machine Update
+    def _post_execute(self, context, volume_micro_state):
+        volume_micro_state['state'] = 'volume_cast'
+        self.db.volume_micro_state_update(context,
+                                          volume_micro_state['volume_id'],
+                                          volume_micro_state)
+
+    def execute(self, context, volume_micro_state, **kwargs):
+        self._pre_execute(volume_micro_state)
         scheduler_hints = kwargs.pop('scheduler_hints', None)
         request_spec = kwargs.copy()
         filter_properties = {}
         if scheduler_hints:
             filter_properties['scheduler_hints'] = scheduler_hints
         self._cast_create_volume(context, request_spec, filter_properties)
+        self._post_execute(context, volume_micro_state)
 
     def revert(self, context, result, flow_failures, **kwargs):
         if isinstance(result, ft.Failure):
@@ -789,7 +875,7 @@ def get_flow(scheduler_rpcapi, volume_rpcapi, db_api,
                 'volume_type': 'raw_volume_type'}))
     api_flow.add(QuotaReserveTask(),
                  EntryCreateTask(db_api),
-                 QuotaCommitTask())
+                 QuotaCommitTask(db_api))
 
     # This will cast it out to either the scheduler or volume manager via
     # the rpc apis provided.

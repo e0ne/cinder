@@ -3225,3 +3225,55 @@ def cgsnapshot_destroy(context, cgsnapshot_id):
                     'deleted': True,
                     'deleted_at': timeutils.utcnow(),
                     'updated_at': literal_column('updated_at')})
+
+
+@require_context
+def _micro_states_get(context, volume_id, session=None):
+    result = model_query(context, models.VolumeMicroState, session=session).\
+        filter_by(volume_id=volume_id).\
+        first()
+    if not result:
+        raise exception.MicroStatesNotFound(resource_id=volume_id)
+    return result
+
+
+@require_context
+def volume_micro_state_create(context, values):
+    if not values.get('id'):
+        values['id'] = str(uuid.uuid4())
+    volume_id = values.get('volume_id')
+    session = get_session()
+    with session.begin():
+        try:
+            if _micro_states_get(context, volume_id, session):
+                raise exception.MicroStatesRecordExists
+        except exception.MicroStatesNotFound:
+            pass
+        micro_states = models.VolumeMicroState()
+        micro_states.update(values)
+        session.add(micro_states)
+        return micro_states
+
+
+@require_context
+@_retry_on_deadlock
+def volume_micro_state_update(context, volume_id, values):
+    session = get_session()
+    with session.begin():
+        micro_states_ref = _micro_states_get(context, volume_id, session)
+        micro_states_ref.update(values)
+        session.add(micro_states_ref)
+    return micro_states_ref
+
+
+@require_context
+@require_volume_exists
+@_retry_on_deadlock
+def volume_micro_state_destroy(context, volume_id):
+    session = get_session()
+    with session.begin():
+        _micro_states_get(context, volume_id, session).\
+            update({'state': 'deleted',
+                    'deleted': True,
+                    'deleted_at': timeutils.utcnow(),
+                    'updated_at': literal_column('updated_at')})

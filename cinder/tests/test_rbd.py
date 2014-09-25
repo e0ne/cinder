@@ -32,6 +32,7 @@ from cinder.openstack.common import log as logging
 from cinder import test
 from cinder.tests.image import fake as fake_image
 from cinder.tests.test_volume import DriverTestCase
+from cinder.tests import utils as tests_utils
 from cinder.volume import configuration as conf
 import cinder.volume.drivers.rbd as driver
 from cinder.volume.flows.manager import create_volume
@@ -1051,14 +1052,14 @@ class ManagedRBDTestCase(DriverTestCase):
             image_id = 'c905cedb-7281-47e4-8a62-f26bc5fc4c77'
 
         # creating volume testdata
-        db.volume_create(self.context,
-                         {'id': volume_id,
-                          'updated_at': timeutils.utcnow(),
-                          'display_description': 'Test Desc',
-                          'size': 20,
-                          'status': 'creating',
-                          'instance_uuid': None,
-                          'host': 'dummy'})
+        tests_utils.create_volume(self.context,
+                                  id=volume_id,
+                                  updated_at=timeutils.utcnow(),
+                                  display_description='Test Desc',
+                                  size=20,
+                                  status='creating',
+                                  instance_uuid=None,
+                                  host='dummy')
 
         try:
             if not clone_error:

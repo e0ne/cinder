@@ -907,3 +907,25 @@ def cgsnapshot_update(context, cgsnapshot_id, values):
 def cgsnapshot_destroy(context, cgsnapshot_id):
     """Destroy the cgsnapshot or raise if it does not exist."""
     return IMPL.cgsnapshot_destroy(context, cgsnapshot_id)
+
+
+######################
+
+
+def volume_micro_state_create(context, values):
+    """Create an entry for state from values dictionary."""
+    return IMPL.volume_micro_state_create(context, values)
+
+
+def volume_micro_state_update(context, volume_id, values):
+    """Set the given properties on an volume and update it.
+
+    Mostly 'state' associated with a particular resource.
+
+    """
+    return IMPL.volume_micro_state_update(context, volume_id, values)
+
+
+def volume_micro_state_destroy(context, volume_id):
+    """Destroy the micro_states record ."""
+    return IMPL.volume_micro_state_destroy(context, volume_id)

@@ -970,3 +970,12 @@ class WebDAVClientError(CinderException):
         message = _("The WebDAV request failed. Reason: %(msg)s, "
                     "Return code/reason: %(code)s, Source Volume: %(src)s, "
                     "Destination Volume: %(dst)s, Method: %(method)s.")
+
+
+# Microstates
+class MicroStatesNotFound(NotFound):
+    message = _("Microstate for resource %(resource_id)s could not be found.")
+
+
+class MicroStatesRecordExists(Duplicate):
+    message = _("Microstate for resource %(resource_id)s already exists.")
