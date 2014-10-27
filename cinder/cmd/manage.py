@@ -247,6 +247,26 @@ class DbCommands(object):
         ctxt = context.get_admin_context()
         db.purge_deleted_rows(ctxt, age_in_days)
 
+    @args('--max_rows', dest='max_rows', metavar='<number>',
+          help='Maximum number of deleted rows to archive. '
+          'If max_rows is not provided, the default value will be 5000 rows.')
+    @args('--last_updated', dest='last_updated', metavar='<number>',
+          help='Integer value of number of days. '
+          'Rows older than last_updated number of days will be deleted.')
+    def archive_deleted_rows(self, max_rows=None, last_updated=None):
+        """Archive deleted rows from production tables to shadow tables.
+
+        :param max_rows: Move up to max_rows deleted. If max_rows is not
+                         provided, the default value will be 5000 rows.
+        :param last_updated: age in days which rows should be deleted.
+        """
+        if max_rows is not None:
+            max_rows = int(max_rows)
+        if last_updated is not None:
+            last_updated = int(last_updated)
+        admin_context = context.get_admin_context()
+        db.archive_deleted_rows(admin_context, max_rows, last_updated)
+
 
 class VersionCommands(object):
     """Class for exposing the codebase version."""

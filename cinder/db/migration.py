@@ -15,15 +15,22 @@
 #    under the License.
 
 """Database setup and migration commands."""
+from __future__ import absolute_import
 
 import os
 import threading
 
 from oslo_config import cfg
 from oslo_db import options
+from sqlalchemy import Sequence
+from sqlalchemy import Table
 from stevedore import driver
 
 from cinder.db.sqlalchemy import api as db_api
+from cinder.i18n import _LE
+from cinder.openstack.common import log as logging
+
+LOG = logging.getLogger(__name__)
 
 INIT_VERSION = 000
 
@@ -59,3 +66,29 @@ def db_sync(version=None, init_version=INIT_VERSION, engine=None):
                                  abs_path=MIGRATE_REPO_PATH,
                                  version=version,
                                  init_version=init_version)
+
+
+def create_shadow_table(table_name, meta):
+    table = Table(table_name, meta, autoload=True)
+
+    columns = []
+    for column in table.columns:
+        column_copy = column.copy()
+        # NOTE(e0ne): Need to create new sequence for PostgreSQL because
+        # column.copy do not create it for a new column.
+        # No need to set both autoincrement and a sequence.
+        if meta.bind.name.startswith('postgres'):
+            column_copy.server_default = Sequence(
+                'shadow_' + column.name + '_id_seq')
+            column_copy.autoincrement = False
+        columns.append(column_copy)
+
+    shadow_table_name = 'shadow_' + table_name
+    shadow_table = Table(shadow_table_name, meta, *columns,
+                         mysql_engine='InnoDB')
+    try:
+        shadow_table.create()
+    except Exception:
+        LOG.info(repr(shadow_table))
+        LOG.exception(_LE('Exception while creating table: %s.'), shadow_table)
+        raise

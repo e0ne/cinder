@@ -53,6 +53,13 @@ Cinder Db
 
     Sync the database up to the most recent version. This is the standard way to create the db as well.
 
+``cinder-manage db archive_deleted_rows [--max_rows] [--last_updated]``
+
+    Archive deleted rows from production tables to shadow tables.
+
+    If max_rows is not provided, the default value will be 5000 rows.
+    If --last_updated is provided, rows older than last-updated number of days will be deleted.
+
 
 Cinder Logs
 ~~~~~~~~~~~

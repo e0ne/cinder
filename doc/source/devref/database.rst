@@ -55,6 +55,16 @@ The :mod:`cinder.db.sqlalchemy.session` Module
     :undoc-members:
     :show-inheritance:
 
+Migrations
+----------
+Adding new tables during the Database Migration process requires creating
+a new shadow table::
+
+    from cinder.db import migration
+
+    migration.create_shadow_table(new_table_name, meta)
+
+It allows to archive deleted rows to a shadow table.
 
 Tests
 -----

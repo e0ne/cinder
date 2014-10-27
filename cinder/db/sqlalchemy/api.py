@@ -36,12 +36,14 @@ from oslo_utils import uuidutils
 import osprofiler.sqlalchemy
 import six
 import sqlalchemy
+from sqlalchemy import exc
 from sqlalchemy import MetaData
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload, joinedload_all
 from sqlalchemy.orm import RelationshipProperty
 from sqlalchemy.schema import Table
 from sqlalchemy.sql.expression import literal_column
+from sqlalchemy.sql.expression import select
 from sqlalchemy.sql.expression import true
 from sqlalchemy.sql import func
 
@@ -60,6 +62,8 @@ options.set_defaults(CONF, connection='sqlite:///$state_path/cinder.sqlite')
 
 _LOCK = threading.Lock()
 _FACADE = None
+
+MAX_DELETED_ROWS_TO_ARCHIVE = 5000
 
 
 def _create_facade_lazily():
@@ -3471,3 +3475,112 @@ def driver_initiator_data_get(context, initiator, namespace):
             filter_by(initiator=initiator).\
             filter_by(namespace=namespace).\
             all()
+
+#################
+
+
+def _get_default_deleted_value(table):
+    # TODO(e0ne): It would be better to introspect the actual default value
+    # from the column, but I don't see a way to do that in the low-level APIs
+    # of SQLAlchemy.
+    try:
+        deleted_column_type = table.c.deleted.type
+    except AttributeError:
+        LOG.warn(_LW('Table "%s" does not support soft delete.'), table)
+        return None
+    if isinstance(deleted_column_type, sqlalchemy.Integer):
+        return 0
+    elif isinstance(deleted_column_type, sqlalchemy.Boolean):
+        return False
+    elif isinstance(deleted_column_type, sqlalchemy.String):
+        return ""
+    else:
+        return None
+
+
+@require_admin_context
+def archive_deleted_rows_for_table(context, tablename,
+                                   max_rows=MAX_DELETED_ROWS_TO_ARCHIVE,
+                                   last_updated=None):
+    """Achive deleted rows for table.
+
+    Move up to max_rows rows with last updated time greater than last_updated
+    from one tables to the corresponding shadow table.
+
+    :returns: number of rows archived.
+    """
+    # The context argument is only used for the decorator.
+    engine = get_engine()
+    conn = engine.connect()
+    metadata = sqlalchemy.MetaData()
+    metadata.bind = engine
+    table = Table(tablename, metadata, autoload=True)
+    default_deleted_value = _get_default_deleted_value(table)
+    shadow_tablename = "shadow_" + tablename
+    rows_archived = 0
+    try:
+        shadow_table = Table(shadow_tablename, metadata, autoload=True)
+    except exc.NoSuchTableError:
+        # No corresponding shadow table; skip it.
+        LOG.warn(_LW('No corresponding shadow table for: %s.'), tablename)
+        return rows_archived
+    # Group the insert and delete in a transaction.
+    with conn.begin():
+        # TODO(e0ne): It would be more efficient to insert(select) and then
+        # delete(same select) without ever returning the selected rows back to
+        # Python but sqlalchemy does not support that directly.
+        try:
+            column = table.c.id
+            column_name = "id"
+        except AttributeError:
+            # We have one table (encryption) where the key is called
+            # "encryption_id" rather than "id"
+            column = table.c.encryption_id
+            column_name = "encryption_id"
+
+        if not hasattr(table.c, 'deleted'):
+            LOG.warn(_LW('Table "%s" does not support soft delete.'), table)
+            return rows_archived
+
+        if not last_updated:
+            query = (
+                select([table],
+                       table.c.deleted != default_deleted_value).order_by(
+                           column).limit(max_rows))
+        else:
+            current = dt.datetime.utcnow()
+            age = current - dt.timedelta(days=last_updated)
+            query = select([table],
+                           table.c.deleted_at < age)
+        rows = conn.execute(query).fetchall()
+        if rows:
+            insert_statement = shadow_table.insert()
+            conn.execute(insert_statement, rows)
+            keys = [getattr(row, column_name) for row in rows]
+            delete_statement = table.delete(column.in_(keys))
+            result = conn.execute(delete_statement)
+            rows_archived = result.rowcount
+            LOG.info(_LI("Archived %(row)d rows from table=%(table)s."),
+                     {'row': rows_archived, 'table': tablename})
+    return rows_archived
+
+
+@require_admin_context
+def archive_deleted_rows(context, max_rows=MAX_DELETED_ROWS_TO_ARCHIVE,
+                         last_updated=None):
+    """Move up to max_rows rows from production tables to the corresponding
+    shadow tables.
+
+    :returns: Number of rows archived.
+    """
+    # The context argument is only used for the decorator.
+    tablenames = []
+    for model_class in models.__dict__.itervalues():
+        if hasattr(model_class, "__tablename__"):
+            tablenames.append(model_class.__tablename__)
+    rows_archived = 0
+    for tablename in tablenames:
+        rows_archived += archive_deleted_rows_for_table(context, tablename,
+                                                        max_rows,
+                                                        last_updated)
+    return rows_archived

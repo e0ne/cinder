@@ -18,6 +18,9 @@ import datetime
 
 from oslo_config import cfg
 from oslo_utils import uuidutils
+import sqlalchemy
+from sqlalchemy import schema
+from sqlalchemy.sql import expression
 
 from cinder import context
 from cinder import db
@@ -1604,3 +1607,96 @@ class DBAPIDriverInitiatorDataTestCase(BaseTest):
         update = {'remove_values': ['key_that_doesnt_exist']}
         db.driver_initiator_data_update(self.ctxt, self.initiator,
                                         self.namespace, update)
+
+
+class ArchiveTestCase(BaseTest):
+    def setUp(self):
+        super(ArchiveTestCase, self).setUp()
+        engine = sqlalchemy_api.get_engine()
+        self.conn = engine.connect()
+        self.metadata = sqlalchemy.MetaData()
+        self.metadata.bind = engine
+        self.quotas_table = schema.Table("quotas",
+                                         self.metadata,
+                                         autoload=True)
+        self.shadow_quotas_table = schema.Table("shadow_quotas",
+                                                self.metadata,
+                                                autoload=True)
+        self.keys = [x for x in xrange(1, 7)]
+
+    def tearDown(self):
+        super(ArchiveTestCase, self).tearDown()
+        delete_statement1 = self.quotas_table.delete(
+            self.quotas_table.c.id.in_(self.keys))
+        self.conn.execute(delete_statement1)
+
+        delete_statement2 = self.shadow_quotas_table.delete(
+            self.shadow_quotas_table.c.id.in_(self.keys))
+        self.conn.execute(delete_statement2)
+
+    def test_archive_deleted_rows(self):
+        # Add 6 rows to table
+        for pk in self.keys:
+            insert_statement = self.quotas_table.insert().values(id=pk,
+                                                                 project_id=1,
+                                                                 resource='f')
+            self.conn.execute(insert_statement)
+
+        # Set 4 to deleted
+        update_statement = self.quotas_table.update().\
+            where(self.quotas_table.c.id.in_(self.keys[:4])).\
+            values(deleted=True)
+        self.conn.execute(update_statement)
+
+        orig_table_query = expression.select([self.quotas_table]).where(
+            self.quotas_table.c.id.in_(self.keys))
+        rows1 = self.conn.execute(orig_table_query).fetchall()
+        # Verify we have 6 in main
+        self.assertEqual(6, len(rows1))
+        shadow_table_query = expression.select([self.shadow_quotas_table]).\
+            where(self.shadow_quotas_table.c.id.in_(self.keys))
+        rows2 = self.conn.execute(shadow_table_query).fetchall()
+        # Verify we have 0 in shadow
+        self.assertEqual(0, len(rows2))
+        # Archive 2 rows
+        db.archive_deleted_rows(self.ctxt, max_rows=2)
+        rows3 = self.conn.execute(orig_table_query).fetchall()
+        # Verify we have 4 left in main
+        self.assertEqual(4, len(rows3))
+        rows4 = self.conn.execute(shadow_table_query).fetchall()
+        # Verify we have 2 in shadow
+        self.assertEqual(2, len(rows4))
+        # Archive 2 more rows
+        db.archive_deleted_rows(self.ctxt, max_rows=2)
+        rows5 = self.conn.execute(orig_table_query).fetchall()
+        # Verify we have 2 left in main
+        self.assertEqual(2, len(rows5))
+        rows6 = self.conn.execute(shadow_table_query).fetchall()
+        # Verify we have 4 in shadow
+        self.assertEqual(4, len(rows6))
+        # Try to archive more, but there are no deleted rows left
+        db.archive_deleted_rows(self.ctxt, max_rows=2)
+        rows7 = self.conn.execute(orig_table_query).fetchall()
+        # Verify we still have 2 left in main
+        self.assertEqual(2, len(rows7))
+        rows8 = self.conn.execute(shadow_table_query).fetchall()
+        # Verify we still have 4 in shadow
+        self.assertEqual(4, len(rows8))
+
+        # Verify last_updated param usage
+        deleted_at = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        update_statement = self.quotas_table.update().\
+            where(self.quotas_table.c.id.in_(self.keys)).\
+            values(deleted=True, deleted_at=deleted_at)
+        self.conn.execute(update_statement)
+        orig_table_query = expression.select([self.quotas_table]).where(
+            self.quotas_table.c.id.in_(self.keys))
+        rows9 = self.conn.execute(orig_table_query).fetchall()
+        self.assertEqual(2, len(rows9))
+        rows10 = self.conn.execute(shadow_table_query).fetchall()
+        self.assertEqual(4, len(rows10))
+        db.archive_deleted_rows(self.ctxt, last_updated=1)
+        rows11 = self.conn.execute(orig_table_query).fetchall()
+        self.assertEqual(0, len(rows11))
+        rows12 = self.conn.execute(shadow_table_query).fetchall()
+        self.assertEqual(6, len(rows12))

@@ -772,6 +772,25 @@ class MigrationsMixin(test_migrations.WalkVersionsMixin):
         backups = db_utils.get_table(engine, 'backups')
         self.assertNotIn('parent_id', backups.c)
 
+    def _pre_upgrade_040(self, engine):
+        metadata = sqlalchemy.schema.MetaData()
+        metadata.bind = engine
+        table_names = metadata.tables.keys()
+        for table_name in table_names:
+            self.assertFalse(table_name.startswith("_shadow"))
+
+    def _check_040(self, engine, data):
+        metadata = sqlalchemy.schema.MetaData()
+        metadata.bind = engine
+        table_names = set(metadata.tables.keys())
+        for table_name in table_names:
+            if table_name.startswith("shadow_"):
+                base_name = table_name.replace("shadow_", "")
+                self.assertIn(base_name, table_names)
+            else:
+                shadow_name = "shadow_" + table_name
+                self.assertIn(shadow_name, table_names)
+
     def test_walk_versions(self):
         self.walk_versions(True, False)
 

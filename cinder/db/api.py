@@ -925,3 +925,26 @@ def driver_initiator_data_update(context, initiator, namespace, updates):
 def driver_initiator_data_get(context, initiator, namespace):
     """Query for an DriverPrivateData that has the specified key"""
     return IMPL.driver_initiator_data_get(context, initiator, namespace)
+
+
+####################
+
+def archive_deleted_rows(context, max_rows=None, last_updated=None):
+    """Move up to max_rows rows older than last_updated number of days from
+    production tables to corresponding shadow tables.
+
+    :returns: number of rows archived
+    """
+    return IMPL.archive_deleted_rows(context, max_rows=max_rows,
+                                     last_updated=last_updated)
+
+
+def archive_deleted_rows_for_table(context, tablename, max_rows=None,
+                                   last_updated=None):
+    """Move up to max_rows rows from tablename to corresponding shadow
+    table.
+
+    :returns: number of rows archived.
+    """
+    return IMPL.archive_deleted_rows_for_table(context, tablename,
+                                               max_rows=max_rows)
