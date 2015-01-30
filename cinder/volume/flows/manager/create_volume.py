@@ -19,6 +19,7 @@ import taskflow.engines
 from taskflow.patterns import linear_flow
 from taskflow.types import failure as ft
 
+from cinder import context as cinder_context
 from cinder import exception
 from cinder import flow_utils
 from cinder.i18n import _, _LE, _LI
@@ -145,6 +146,7 @@ class OnFailureRescheduleTask(flow_utils.CinderTask):
                           volume_id)
 
     def revert(self, context, result, flow_failures, **kwargs):
+        context = cinder_context.RequestContext.from_dict(context)
         # Check if we have a cause which can tell us not to reschedule.
         for failure in flow_failures.values():
             if failure.check(*self.no_reschedule_types):
@@ -174,6 +176,7 @@ class ExtractVolumeRefTask(flow_utils.CinderTask):
         self.host = host
 
     def execute(self, context, volume_id):
+        context = cinder_context.RequestContext.from_dict(context)
         # NOTE(harlowja): this will fetch the volume from the database, if
         # the volume has been deleted before we got here then this should fail.
         #
@@ -184,6 +187,7 @@ class ExtractVolumeRefTask(flow_utils.CinderTask):
         return volume_ref
 
     def revert(self, context, volume_id, result, **kwargs):
+        context = cinder_context.RequestContext.from_dict(context)
         if isinstance(result, ft.Failure):
             return
 
@@ -212,6 +216,7 @@ class ExtractVolumeSpecTask(flow_utils.CinderTask):
         self.db = db
 
     def execute(self, context, volume_ref, **kwargs):
+        context = cinder_context.RequestContext.from_dict(context)
         get_remote_image_service = glance.get_remote_image_service
 
         volume_name = volume_ref['name']
@@ -287,6 +292,7 @@ class ExtractVolumeSpecTask(flow_utils.CinderTask):
         return specs
 
     def revert(self, context, result, **kwargs):
+        context = cinder_context.RequestContext.from_dict(context)
         if isinstance(result, ft.Failure):
             return
         volume_spec = result.get('volume_spec')
@@ -307,6 +313,7 @@ class NotifyVolumeActionTask(flow_utils.CinderTask):
         self.event_suffix = event_suffix
 
     def execute(self, context, volume_ref):
+        context = cinder_context.RequestContext.from_dict(context)
         volume_id = volume_ref['id']
         try:
             volume_utils.notify_about_volume_usage(context, volume_ref,
@@ -603,6 +610,7 @@ class CreateVolumeFromSpecTask(flow_utils.CinderTask):
         return self.driver.create_volume(volume_ref)
 
     def execute(self, context, volume_ref, volume_spec):
+        context = cinder_context.RequestContext.from_dict(context)
         volume_spec = dict(volume_spec)
         volume_id = volume_spec.pop('volume_id', None)
         if not volume_id:
@@ -680,6 +688,7 @@ class CreateVolumeOnFinishTask(NotifyVolumeActionTask):
         }
 
     def execute(self, context, volume, volume_spec):
+        context = cinder_context.RequestContext.from_dict(context)
         volume_id = volume['id']
         new_status = self.status_translation.get(volume_spec.get('status'),
                                                  'available')
@@ -694,7 +703,8 @@ class CreateVolumeOnFinishTask(NotifyVolumeActionTask):
             # 'building' if this fails)??
             volume_ref = self.db.volume_update(context, volume_id, update)
             # Now use the parent to notify.
-            super(CreateVolumeOnFinishTask, self).execute(context, volume_ref)
+            super(CreateVolumeOnFinishTask, self).execute(context.to_dict(),
+                                                          volume_ref)
         except exception.CinderException:
             LOG.exception(_LE("Failed updating volume %(volume_id)s with "
                               "%(update)s") % {'volume_id': volume_id,
@@ -706,8 +716,7 @@ class CreateVolumeOnFinishTask(NotifyVolumeActionTask):
             'volume_id': volume_id,
         })
 
-
-def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
+def factory(context, db, driver, scheduler_rpcapi, host, volume_id,
              allow_reschedule, reschedule_context, request_spec,
              filter_properties, snapshot_id=None, image_id=None,
              source_volid=None, source_replicaid=None,
@@ -726,7 +735,7 @@ def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
     7. Attaches a on-success *only* task that notifies that the volume creation
        has ended and performs further database status updates.
     """
-
+#    context = cinder_context.RequestContext.from_dict(context)
     flow_name = ACTION.replace(":", "_") + "_manager"
     volume_flow = linear_flow.Flow(flow_name)
 
@@ -756,5 +765,113 @@ def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
                     CreateVolumeFromSpecTask(db, driver),
                     CreateVolumeOnFinishTask(db, "create.end"))
 
+    from taskflow.persistence import backends
+    from six.moves import urllib_parse
+    tmp_dir = '/tmp/cinder/taskflow'
+    backend_uri = "file:///%s" % tmp_dir
+    # backend_uri = 'sqlite:////tmp/cinder/persisting.db'
+    parsed_url = urllib_parse.urlparse(backend_uri)
+    conf = {
+        'path': parsed_url.path,
+        'connection': backend_uri,
+    }
+    import contextlib
+    backend = backends.fetch(conf)
+    with contextlib.closing(backend.get_connection()) as conn:
+        conn.upgrade()
+    #backend = backends.fetch(conf)
+
+    from taskflow.persistence import logbook
+    book = logbook.LogBook("cinder-manager-create")
+
     # Now load (but do not run) the flow using the provided initial data.
-    return taskflow.engines.load(volume_flow, store=create_what)
+    return volume_flow
+    return taskflow.engines.load_from_factory(factory,
+                                 engine='serial',
+                                 store=create_what,
+                                 backend=backend,
+                                 book=book)
+
+
+def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
+             allow_reschedule, reschedule_context, request_spec,
+             filter_properties, snapshot_id=None, image_id=None,
+             source_volid=None, source_replicaid=None,
+             consistencygroup_id=None):
+    """Constructs and returns the manager entrypoint flow.
+
+    This flow will do the following:
+
+    1. Determines if rescheduling is enabled (ahead of time).
+    2. Inject keys & values for dependent tasks.
+    3. Selects 1 of 2 activated only on *failure* tasks (one to update the db
+       status & notify or one to update the db status & notify & *reschedule*).
+    4. Extracts a volume specification from the provided inputs.
+    5. Notifies that the volume has start to be created.
+    6. Creates a volume from the extracted volume specification.
+    7. Attaches a on-success *only* task that notifies that the volume creation
+       has ended and performs further database status updates.
+    """
+
+    # flow_name = ACTION.replace(":", "_") + "_manager"
+    # volume_flow = linear_flow.Flow(flow_name)
+
+    # # This injects the initial starting flow values into the workflow so that
+    # # the dependency order of the tasks provides/requires can be correctly
+    # # determined.
+#    context = context.to_dict()
+    create_what = {
+        'context': context,
+        'filter_properties': filter_properties,
+        'image_id': image_id,
+        'request_spec': request_spec,
+        'snapshot_id': snapshot_id,
+        'source_volid': source_volid,
+        'volume_id': volume_id,
+        'source_replicaid': source_replicaid,
+        'consistencygroup_id': consistencygroup_id,
+    }
+
+    # volume_flow.add(ExtractVolumeRefTask(db, host))
+
+    # if allow_reschedule and request_spec:
+    #     volume_flow.add(OnFailureRescheduleTask(reschedule_context,
+    #                                             db, scheduler_rpcapi))
+
+    # volume_flow.add(ExtractVolumeSpecTask(db),
+    #                 NotifyVolumeActionTask(db, "create.start"),
+    #                 CreateVolumeFromSpecTask(db, driver),
+    #                 CreateVolumeOnFinishTask(db, "create.end"))
+
+    from taskflow.persistence import backends
+    from six.moves import urllib_parse
+    tmp_dir = '/tmp/cinder/taskflow'
+    backend_uri = "file:///%s" % tmp_dir
+    # backend_uri = 'sqlite:////tmp/cinder/persisting.db'
+    parsed_url = urllib_parse.urlparse(backend_uri)
+    conf = {
+        'path': parsed_url.path,
+        'connection': backend_uri,
+    }
+    import contextlib
+    backend = backends.fetch(conf)
+#    with contextlib.closing(backend.get_connection()) as conn:
+#        conn.upgrade()
+#    backend = backends.fetch(conf)
+
+    from taskflow.persistence import logbook
+    book = logbook.LogBook("cinder-manager-create")
+    # # Now load (but do not run) the flow using the provided initial data.
+    # def factory():
+    #     return volume_flow
+    return taskflow.engines.load_from_factory(factory,
+        factory_args=[context, db, driver, scheduler_rpcapi, host, volume_id,
+             allow_reschedule, reschedule_context, request_spec,
+             filter_properties], factory_kwargs={'snapshot_id':None, 'image_id':None,
+             'source_volid':None, 'source_replicaid':None,
+             'consistencygroup_id':None},
+
+                                 engine='serial',
+                                 store=create_what,
+                                 backend=backend,
+                                 book=book)

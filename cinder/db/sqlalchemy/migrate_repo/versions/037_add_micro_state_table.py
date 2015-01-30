@@ -37,7 +37,7 @@ def upgrade(migrate_engine):
         Column('id', String(length=36), primary_key=True, nullable=False),
         Column('resource_id', String(length=36), ForeignKey('volumes.id'),
                nullable=False),
-        Column('state', String(length=255), nullable=False),
+        Column('state', String(length=255), nullable=True),
         mysql_engine='InnoDB',
         mysql_charset='utf8'
     )

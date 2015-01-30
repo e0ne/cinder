@@ -553,7 +553,7 @@ class MicroStates(BASE, CinderBase):
     __tablename__ = 'micro_states'
     id = Column(String(36), primary_key=True)
     resource_id = Column(String(36), ForeignKey('volumes.id'))
-    state = Column(String(255))
+    state = Column(String(255), nullable=True)
     volume = relationship(Volume, backref="MicroStates",
                           foreign_keys=resource_id,
                           primaryjoin=

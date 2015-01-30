@@ -287,6 +287,34 @@ class VolumeManager(manager.SchedulerDependentManager):
             # to initialize the driver correctly.
             return
 
+        from taskflow import states
+        FINISHED_STATES = (states.SUCCESS, states.FAILURE, states.REVERTED)
+        from taskflow.persistence import backends
+        from six.moves import urllib_parse
+        tmp_dir = '/tmp/cinder/taskflow'
+        backend_uri = "file:///%s" % tmp_dir
+        # backend_uri = 'sqlite:////tmp/cinder/persisting.db'
+        parsed_url = urllib_parse.urlparse(backend_uri)
+        conf = {
+            'path': parsed_url.path,
+            'connection': backend_uri,
+        }
+        import contextlib
+        import taskflow.engines
+        def resume(flowdetail, backend):
+            print('Resuming flow %s %s' % (flowdetail.name, flowdetail.uuid))
+            engine = taskflow.engines.load_from_detail(flow_detail=flowdetail,
+                                                       backend=backend)
+            engine.run()
+
+        backend = backends.fetch(conf)
+        logbooks = list(backend.get_connection().get_logbooks())
+        for lb in logbooks:
+            for fd in lb:
+                if fd.state not in FINISHED_STATES:
+                    resume(fd, backend)
+
+
         volumes = self.db.volume_get_all_by_host(ctxt, self.host)
         # FIXME volume count for exporting is wrong
         LOG.debug("Re-exporting %s volumes" % len(volumes))
@@ -360,15 +388,16 @@ class VolumeManager(manager.SchedulerDependentManager):
         try:
             # NOTE(flaper87): Driver initialization is
             # verified by the task itself.
+            ctx=context_elevated.to_dict()
             flow_engine = create_volume.get_flow(
-                context_elevated,
+                ctx,
                 self.db,
                 self.driver,
                 self.scheduler_rpcapi,
                 self.host,
                 volume_id,
                 allow_reschedule,
-                context,
+                context.to_dict(),
                 request_spec,
                 filter_properties,
                 snapshot_id=snapshot_id,
