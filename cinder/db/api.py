@@ -912,6 +912,10 @@ def cgsnapshot_destroy(context, cgsnapshot_id):
 ######################
 
 
+def volume_micro_states_get(context, volume_id):
+    return IMPL._micro_states_get(context, volume_id)
+
+
 def volume_micro_state_create(context, values):
     """Create an entry for state from values dictionary."""
     return IMPL.volume_micro_state_create(context, values)

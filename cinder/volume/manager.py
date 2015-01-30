@@ -319,6 +319,7 @@ class VolumeManager(manager.SchedulerDependentManager):
                                           {'status': 'error'})
                 else:
                     LOG.info(_LI("volume %s: skipping export"), volume['id'])
+
         except Exception as ex:
             LOG.error(_LE("Error encountered during "
                           "re-exporting phase of driver initialization: "
@@ -329,6 +330,40 @@ class VolumeManager(manager.SchedulerDependentManager):
 
         # at this point the driver is considered initialized.
         self.driver.set_initialized()
+
+        for volume in volumes:
+            volume_id = volume['id']
+            try:
+                microstate = self.db.volume_micro_states_get(ctxt,volume_id)
+            except exception.MicroStatesNotFound:
+                continue
+            if microstate.state:
+                # from cinder.volume import states
+                next_steps = create_volume.AVAILABLE_TASKS[
+                                         create_volume.AVAILABLE_TASKS.index(
+                                             microstate.state
+                                         )+1:]
+                LOG.error('==========', next_steps)
+                flow_engine = create_volume.get_flow(
+                            ctxt,
+                            self.db,
+                            self.driver,
+                            self.scheduler_rpcapi,
+                            self.host,
+                            volume_id,
+                            True, # allow_reschedule,
+                            ctxt,
+                            None, # request_spec,
+                            None, #filter_properties,
+                            # snapshot_id=snapshot_id,
+                            # image_id=image_id,
+                            # source_volid=source_volid,
+                            # source_replicaid=source_replicaid,
+                            # consistencygroup_id=consistencygroup_id,
+                            tasks=next_steps, tasks_args={'volume_ref': volume, 'volume': volume, 'volume_spec':dict(volume.iteritems())})
+                with flow_utils.DynamicLogListener(flow_engine,
+                                                   logger=LOG):
+                    flow_engine.run()
 
         LOG.debug('Resuming any in progress delete operations')
         for volume in volumes:

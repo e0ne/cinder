@@ -45,6 +45,15 @@ IMAGE_ATTRIBUTES = (
 )
 
 
+AVAILABLE_TASKS = (
+    'entry_create',
+    'extract-volume-ref-task',
+    'extract-volume-spec-task',
+    'create-volume-from-spec-task',
+    None
+)
+
+
 class OnFailureRescheduleTask(flow_utils.CinderTask):
     """Triggers a rescheduling request to be sent when reverting occurs.
 
@@ -179,6 +188,12 @@ class ExtractVolumeRefTask(flow_utils.CinderTask):
         #
         # In the future we might want to have a lock on the volume_id so that
         # the volume can not be deleted while its still being created?
+        micro_states_properties = {
+            'volume_id': volume_id,
+            'state': 'extract-volume-ref-task',
+        }
+        self.db.volume_micro_state_update(
+            context, volume_id, micro_states_properties)
         volume_ref = self.db.volume_get(context, volume_id)
 
         return volume_ref
@@ -186,7 +201,12 @@ class ExtractVolumeRefTask(flow_utils.CinderTask):
     def revert(self, context, volume_id, result, **kwargs):
         if isinstance(result, ft.Failure):
             return
-
+        micro_states_properties = {
+            'volume_id': volume_id,
+            'state': 'entry_create',
+        }
+        self.db.volume_micro_state_update(
+            context, volume_id, micro_states_properties)
         common.error_out_volume(context, self.db, volume_id)
         LOG.error(_LE("Volume %s: create failed"), volume_id)
 
@@ -284,6 +304,12 @@ class ExtractVolumeSpecTask(flow_utils.CinderTask):
                 'image_service': image_service,
             })
 
+        micro_states_properties = {
+            'volume_id': volume_ref['id'],
+            'state': 'extract-volume-spec-task',
+        }
+        self.db.volume_micro_state_update(
+            context, volume_ref['id'], micro_states_properties)
         return specs
 
     def revert(self, context, result, **kwargs):
@@ -292,21 +318,23 @@ class ExtractVolumeSpecTask(flow_utils.CinderTask):
         volume_spec = result.get('volume_spec')
         # Restore the source volume status and set the volume to error status.
         common.restore_source_status(context, self.db, volume_spec)
+        # micro_states_properties = {
+        #     'volume_id': volume_id,
+        #     'state': 'extract-volume-ref-task',
+        # }
+        # self.db.volume_micro_state_update(
+        #     context, volume_id, micro_states_properties)
 
 
-class NotifyVolumeActionTask(flow_utils.CinderTask):
+class NotifyVolumeActionMixin(object):
     """Performs a notification about the given volume when called.
 
     Reversion strategy: N/A
     """
-
     def __init__(self, db, event_suffix):
-        super(NotifyVolumeActionTask, self).__init__(addons=[ACTION,
-                                                             event_suffix])
-        self.db = db
-        self.event_suffix = event_suffix
+        pass
 
-    def execute(self, context, volume_ref):
+    def notify(self, context, volume_ref):
         volume_id = volume_ref['id']
         try:
             volume_utils.notify_about_volume_usage(context, volume_ref,
@@ -658,10 +686,17 @@ class CreateVolumeFromSpecTask(flow_utils.CinderTask):
                           {'volume_id': volume_id, 'model': model_update})
             raise
 
+        micro_states_properties = {
+            'volume_id': volume_id,
+            'state': 'create-volume-from-spec-task',
+        }
+        self.db.volume_micro_state_update(
+            context, volume_id, micro_states_properties)
+
         return volume_ref
 
 
-class CreateVolumeOnFinishTask(NotifyVolumeActionTask):
+class CreateVolumeOnFinishTask(flow_utils.CinderTask):
     """On successful volume creation this will perform final volume actions.
 
     When a volume is created successfully it is expected that MQ notifications
@@ -674,16 +709,38 @@ class CreateVolumeOnFinishTask(NotifyVolumeActionTask):
     """
 
     def __init__(self, db, event_suffix):
-        super(CreateVolumeOnFinishTask, self).__init__(db, event_suffix)
+        super(CreateVolumeOnFinishTask, self).__init__(addons=[ACTION,
+                                                             event_suffix])
+        self.db = db
+        self.event_suffix = event_suffix
         self.status_translation = {
             'migration_target_creating': 'migration_target',
         }
 
-    def execute(self, context, volume, volume_spec):
-        volume_id = volume['id']
-        new_status = self.status_translation.get(volume_spec.get('status'),
-                                                 'available')
+    def notify(self, context, volume_ref):
+        volume_id = volume_ref['id']
+        try:
+            volume_utils.notify_about_volume_usage(context, volume_ref,
+                                                   self.event_suffix,
+                                                   host=volume_ref['host'])
+        except exception.CinderException:
+            # If notification sending of volume database entry reading fails
+            # then we shouldn't error out the whole workflow since this is
+            # not always information that must be sent for volumes to operate
+            LOG.exception(_LE("Failed notifying about the volume"
+                              " action %(event)s for volume %(volume_id)s"),
+                          {'event': self.event_suffix,
+                           'volume_id': volume_id})
 
+    def execute(self, context, volume, volume_spec=None):
+        volume_id = volume['id']
+        if volume_spec:
+            new_status = self.status_translation.get(volume_spec.get('status'),
+                                                    'available')
+        else:
+            new_status = 'available'
+        import time
+#        time.sleep(600)
         updated_at = timeutils.utcnow()
         update = {
             'status': new_status,
@@ -705,24 +762,31 @@ class CreateVolumeOnFinishTask(NotifyVolumeActionTask):
                                               volume_id,
                                               microstate_update)
             # Now use the parent to notify.
-            super(CreateVolumeOnFinishTask, self).execute(context, volume_ref)
+            self.notify(context, volume_ref)
         except exception.CinderException:
             LOG.exception(_LE("Failed updating volume %(volume_id)s with "
                               "%(update)s"), {'volume_id': volume_id,
                                               'update': update})
         # Even if the update fails, the volume is ready.
         msg = _("Volume %(volume_name)s (%(volume_id)s): created successfully")
-        LOG.info(msg, {
-            'volume_name': volume_spec['volume_name'],
-            'volume_id': volume_id,
-        })
+#        LOG.info(msg, {
+#            'volume_name': volume_spec['volume_name'],
+#            'volume_id': volume_id,
+#        })
+
+        # micro_states_properties = {
+        #     'volume_id': volume_id,
+        #     'state': 'extract-volume-on-finish-task',
+        # }
+        # self.db.volume_micro_state_update(
+        #     context, volume_id, micro_states_properties)
 
 
 def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
              allow_reschedule, reschedule_context, request_spec,
              filter_properties, snapshot_id=None, image_id=None,
              source_volid=None, source_replicaid=None,
-             consistencygroup_id=None):
+             consistencygroup_id=None, tasks=None, tasks_args=None):
     """Constructs and returns the manager entrypoint flow.
 
     This flow will do the following:
@@ -737,6 +801,9 @@ def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
     7. Attaches a on-success *only* task that notifies that the volume creation
        has ended and performs further database status updates.
     """
+
+    if not tasks:
+        tasks = list(AVAILABLE_TASKS)
 
     flow_name = ACTION.replace(":", "_") + "_manager"
     volume_flow = linear_flow.Flow(flow_name)
@@ -756,16 +823,24 @@ def get_flow(context, db, driver, scheduler_rpcapi, host, volume_id,
         'consistencygroup_id': consistencygroup_id,
     }
 
-    volume_flow.add(ExtractVolumeRefTask(db, host))
+    if tasks_args:
+        create_what.update(tasks_args)
+
+    if 'extract-volume-ref-task' in tasks:
+        volume_flow.add(ExtractVolumeRefTask(db, host))
 
     if allow_reschedule and request_spec:
         volume_flow.add(OnFailureRescheduleTask(reschedule_context,
                                                 db, scheduler_rpcapi))
 
-    volume_flow.add(ExtractVolumeSpecTask(db),
-                    NotifyVolumeActionTask(db, "create.start"),
-                    CreateVolumeFromSpecTask(db, driver),
-                    CreateVolumeOnFinishTask(db, "create.end"))
+    if 'extract-volume-spec-task' in tasks:
+        volume_flow.add(ExtractVolumeSpecTask(db))
+
+    if 'create-volume-from-spec-task' in tasks:
+        volume_flow.add(CreateVolumeFromSpecTask(db, driver))
+
+    if None in tasks:
+        volume_flow.add(CreateVolumeOnFinishTask(db, "create.end"))
 
     # Now load (but do not run) the flow using the provided initial data.
     return taskflow.engines.load(volume_flow, store=create_what)
