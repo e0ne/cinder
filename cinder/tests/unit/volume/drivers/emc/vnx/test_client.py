@@ -13,8 +13,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import mock
+
 from cinder import exception
 from cinder import test
+from cinder.tests.unit import utils as cinder_utils
 from cinder.tests.unit.volume.drivers.emc.vnx import fake_exception \
     as storops_ex
 from cinder.tests.unit.volume.drivers.emc.vnx import fake_storops as storops
@@ -237,9 +240,11 @@ class TestClient(test.TestCase):
     def test_expand_lun_already_expanded(self, client, _ignore):
         client.expand_lun('lun', 10)
 
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+                cinder_utils.ZeroIntervalLoopingCall)
     @utils.patch_no_sleep
     @res_mock.patch_client
-    def test_expand_lun_not_ops_ready(self, client, _ignore):
+    def _test_expand_lun_not_ops_ready(self, client, _ignore):
         self.assertRaises(storops_ex.VNXLunPreparingError,
                           client.expand_lun, 'lun', 10)
         lun = client.vnx.get_lun()

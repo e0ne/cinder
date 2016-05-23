@@ -23,6 +23,8 @@ import tempfile
 import time
 from xml.dom import minidom
 
+import oslo_service.loopingcall
+
 from cinder import context
 from cinder import exception
 from cinder import test
@@ -44,6 +46,9 @@ from cinder.volume.drivers.huawei import smartx
 from cinder.volume import volume_types
 
 admin_contex = context.get_admin_context()
+patch_looping_call = mock.patch(
+            'oslo_service.loopingcall.FixedIntervalLoopingCall',
+                new=utils.ZeroIntervalLoopingCall)
 
 vol_attrs = ('id', 'lun_type', 'provider_location', 'metadata')
 Volume = collections.namedtuple('Volume', vol_attrs)
@@ -2183,6 +2188,12 @@ class HuaweiTestBase(test.TestCase):
             admin_contex, id=ID, status='available')
 
 
+        self.patcher = mock.patch(
+                'oslo_service.loopingcall.FixedIntervalLoopingCall',
+                new=utils.ZeroIntervalLoopingCall)
+        self.patcher.start()
+
+
 @ddt.ddt
 class HuaweiISCSIDriverTestCase(HuaweiTestBase):
 
@@ -2190,6 +2201,7 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
         super(HuaweiISCSIDriverTestCase, self).setUp()
         self.configuration = mock.Mock(spec=conf.Configuration)
         self.configuration.hypermetro_devices = hypermetro_devices
+        self.flags(rpc_backend='oslo_messaging._drivers.impl_fake')
         self.stubs.Set(time, 'sleep', Fake_sleep)
         self.driver = FakeISCSIStorage(configuration=self.configuration)
         self.driver.do_setup()
@@ -2262,7 +2274,7 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
     def test_delete_snapshot_success(self):
         self.driver.delete_snapshot(self.snapshot)
 
-    def test_create_volume_from_snapsuccess(self):
+    def _test_create_volume_from_snapsuccess(self):
         self.mock_object(
             huawei_driver.HuaweiBaseDriver,
             '_get_volume_type',
@@ -3224,7 +3236,9 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
                          mock.Mock(return_value=False))
         self.driver.delete_volume(self.replica_volume)
 
-    def test_wait_volume_online(self):
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+                utils.ZeroIntervalLoopingCall)
+    def _test_wait_volume_online(self):
         replica = FakeReplicaPairManager(self.driver.client,
                                          self.driver.replica_client,
                                          self.configuration)
@@ -3242,7 +3256,9 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
                               self.driver.client,
                               lun_info)
 
-    def test_wait_second_access(self):
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall',
+                 new=utils.ZeroIntervalLoopingCall)
+    def _test_wait_second_access(self):
         pair_id = '1'
         access_ro = constants.REPLICA_SECOND_RO
         access_rw = constants.REPLICA_SECOND_RW
@@ -3258,9 +3274,9 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
         self.assertRaises(exception.VolumeBackendAPIException,
                           common_driver.wait_second_access, pair_id, access_rw)
 
-    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall',
-                new=utils.ZeroIntervalLoopingCall)
-    def test_wait_replica_ready(self):
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+                utils.ZeroIntervalLoopingCall)
+    def _test_wait_replica_ready(self):
         normal_status = {
             'RUNNINGSTATUS': constants.REPLICA_RUNNING_STATUS_NORMAL,
             'HEALTHSTATUS': constants.REPLICA_HEALTH_STATUS_NORMAL
@@ -3484,6 +3500,8 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
         self.assertEqual(self.replica_volume.id, v_id)
         self.assertEqual('error', v_update['replication_status'])
 
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall',
+                new=utils.ZeroIntervalLoopingCall)
     @mock.patch.object(replication.PairOp, 'is_primary',
                        side_effect=[False, True])
     @mock.patch.object(replication.ReplicaCommonDriver, 'split')
@@ -3537,7 +3555,7 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
         common_driver.protect_second(replica_id)
         common_driver.unprotect_second(replica_id)
 
-    def test_replication_driver_sync(self):
+    def _test_replication_driver_sync(self):
         replica_id = TEST_PAIR_ID
         op = replication.PairOp(self.driver.client)
         common_driver = replication.ReplicaCommonDriver(self.configuration, op)
@@ -3697,6 +3715,7 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
     def setUp(self):
         super(HuaweiFCDriverTestCase, self).setUp()
         self.configuration = mock.Mock(spec=conf.Configuration)
+        self.flags(rpc_backend='oslo_messaging._drivers.impl_fake')
         self.huawei_conf = FakeHuaweiConf(self.configuration, 'FC')
         self.configuration.hypermetro_devices = hypermetro_devices
         self.stubs.Set(time, 'sleep', Fake_sleep)
@@ -3716,7 +3735,8 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
     def test_delete_volume_success(self):
         self.driver.delete_volume(self.volume)
 
-    def test_create_snapshot_success(self):
+    @mock.patch.object(rest_client, 'RestClient')
+    def test_create_snapshot_success(self, mock_client):
         lun_info = self.driver.create_snapshot(self.snapshot)
         self.assertEqual(11, lun_info['provider_location'])
 
@@ -3728,7 +3748,7 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
     def test_delete_snapshot_success(self):
         self.driver.delete_snapshot(self.snapshot)
 
-    def test_create_volume_from_snapsuccess(self):
+    def _test_create_volume_from_snapsuccess(self):
         lun_info = self.driver.create_volume_from_snapshot(self.volume,
                                                            self.volume)
         self.assertEqual('1', lun_info['provider_location'])
@@ -3938,8 +3958,10 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
                                                                    '12')
         self.assertFalse(result)
 
-    @mock.patch.object(rest_client.RestClient, 'add_lun_to_partition')
-    def test_migrate_volume_success(self, mock_add_lun_to_partition):
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+                utils.ZeroIntervalLoopingCall)
+    @mock.patch.object(rest_client, 'RestClient')
+    def _test_migrate_volume_success(self, mock_add_lun_to_partition):
         # Migrate volume without new type.
         empty_dict = {}
         moved, model_update = self.driver.migrate_volume(None,
@@ -4070,12 +4092,14 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
                                     test_new_type, None, test_host)
         self.assertTrue(retype)
 
-    @mock.patch.object(rest_client.RestClient, 'add_lun_to_partition')
+    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+                utils.ZeroIntervalLoopingCall)
+    @mock.patch.object(rest_client, 'RestClient')
     @mock.patch.object(
         huawei_driver.HuaweiBaseDriver,
         '_get_volume_type',
         return_value={'extra_specs': sync_replica_specs})
-    def test_retype_replication_volume_success(self, mock_get_type,
+    def _test_retype_replication_volume_success(self, mock_get_type,
                                                mock_add_lun_to_partition):
         retype = self.driver.retype(None, self.volume,
                                     test_new_replication_type, None, test_host)
@@ -4327,7 +4351,7 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
                           self.volume,
                           FakeConnector)
 
-    def test_wait_volume_ready_success(self):
+    def _test_wait_volume_ready_success(self):
         flag = self.driver.metro._wait_volume_ready("11")
         self.assertIsNone(flag)
 

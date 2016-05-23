@@ -13,6 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import unittest
+
 import mock
 
 from cinder import test
@@ -2049,7 +2051,8 @@ class InfortrendCLITestCase(test.TestCase):
 
         return cli
 
-    def _test_command_succeed(self, command):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_command_succeed(self, command):
 
         fake_cli_succeed = self.cli_data.get_fake_cli_succeed()
         test_command = self._cli_set(command, fake_cli_succeed)
@@ -2057,7 +2060,8 @@ class InfortrendCLITestCase(test.TestCase):
         rc, out = test_command.execute()
         self.assertEqual(0, rc)
 
-    def _test_command_failed(self, command):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_command_failed(self, command):
 
         fake_cli_failed = self.cli_data.get_fake_cli_failed()
         test_command = self._cli_set(command, fake_cli_failed)
@@ -2065,7 +2069,8 @@ class InfortrendCLITestCase(test.TestCase):
         rc, out = test_command.execute()
         self.assertEqual(int('0x000c', 16), rc)
 
-    def _test_command_failed_retry_succeed(self, log_error, command):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_command_failed_retry_succeed(self, log_error, command):
 
         log_error.reset_mock()
 
@@ -2099,7 +2104,8 @@ class InfortrendCLITestCase(test.TestCase):
         ]
         log_error.assert_has_calls(expect_log_error)
 
-    def _test_command_failed_retry_timeout(self, log_error, command):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_command_failed_retry_timeout(self, log_error, command):
 
         log_error.reset_mock()
 
@@ -2154,7 +2160,8 @@ class InfortrendCLITestCase(test.TestCase):
         ]
         log_error.assert_has_calls(expect_log_error)
 
-    def _test_show_command(self, fake_data, test_data, command, *params):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_show_command(self, fake_data, test_data, command, *params):
 
         test_command = self._cli_set(command, fake_data)
 

@@ -17,6 +17,7 @@
 import ddt
 import errno
 import os
+import unittest
 
 import mock
 from oslo_utils import units
@@ -1125,8 +1126,9 @@ class NfsDriverDoSetupTestCase(test.TestCase):
     def test_update_migrated_in_use_volume(self, rename_volume):
         self._test_update_migrated_volume('in-use', rename_volume)
 
-    def _test_update_migrated_volume(self, volume_status, rename_volume,
-                                     rename_exception=False):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_update_migrated_volume(self, volume_status, rename_volume,
+                                    rename_exception=False):
         drv = nfs.NfsDriver(configuration=self.configuration)
         fake_volume_id = 'f51b5730-13b7-11e6-a238-fa163e67a298'
         fake_new_volume_id = '12341234-13b7-11e6-a238-fa163e67a298'

@@ -15,6 +15,7 @@
 import copy
 import errno
 import os
+import unittest
 
 import mock
 
@@ -226,8 +227,9 @@ class VZStorageTestCase(test.TestCase):
 
         mock_resize_image.assert_called_once_with(self._FAKE_VOLUME_PATH, 10)
 
-    def _test_check_extend_support(self, has_snapshots=False,
-                                   is_eligible=True):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_check_extend_support(self, has_snapshots=False,
+                                  is_eligible=True):
         drv = self._vz_driver
         drv.local_path = mock.Mock(return_value=self._FAKE_VOLUME_PATH)
         drv._is_share_eligible = mock.Mock(return_value=is_eligible)

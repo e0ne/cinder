@@ -321,6 +321,7 @@ class VMwareVcVmdkDriverTestCase(test.TestCase):
             image_id)
         validate_disk_format.assert_called_once_with(image_meta['disk_format'])
 
+    @unittest.skip("Skip until bug #1578986 is fixed")
     @mock.patch('cinder.volume.drivers.vmware.vmdk.VMwareVcVmdkDriver.'
                 '_validate_disk_format')
     @mock.patch('cinder.volume.drivers.vmware.volumeops.'
@@ -333,17 +334,17 @@ class VMwareVcVmdkDriverTestCase(test.TestCase):
                        '_fetch_stream_optimized_image')
     @mock.patch.object(VMDK_DRIVER, 'volumeops')
     @mock.patch.object(VMDK_DRIVER, '_extend_backing')
-    def _test_copy_image_to_volume(self,
-                                   extend_backing,
-                                   vops,
-                                   fetch_stream_optimized_image,
-                                   create_volume_from_non_stream_opt_image,
-                                   validate_image_disk_type,
-                                   validate_image_adapter_type,
-                                   validate_disk_format,
-                                   vmware_disk_type='streamOptimized',
-                                   backing_disk_size=VOL_SIZE,
-                                   call_extend_backing=False):
+    def test_copy_image_to_volume(self,
+                                  extend_backing,
+                                  vops,
+                                  fetch_stream_optimized_image,
+                                  create_volume_from_non_stream_opt_image,
+                                  validate_image_disk_type,
+                                  validate_image_adapter_type,
+                                  validate_disk_format,
+                                  vmware_disk_type='streamOptimized',
+                                  backing_disk_size=VOL_SIZE,
+                                  call_extend_backing=False):
 
         image_service = mock.Mock()
         image_meta = self._create_image_meta(vmware_disktype=vmware_disk_type)
@@ -404,7 +405,7 @@ class VMwareVcVmdkDriverTestCase(test.TestCase):
     @mock.patch.object(VMDK_DRIVER, '_get_storage_profile_id')
     @mock.patch.object(VMDK_DRIVER, '_select_ds_for_volume')
     @mock.patch.object(VMDK_DRIVER, '_delete_temp_backing')
-    def _test_create_volume_from_non_stream_optimized_image(
+    def test_create_volume_from_non_stream_optimized_image(
             self,
             delete_tmp_backing,
             select_ds_for_volume,

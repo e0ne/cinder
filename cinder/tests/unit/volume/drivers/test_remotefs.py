@@ -15,6 +15,7 @@
 import collections
 import copy
 import os
+import unittest
 
 import ddt
 import mock
@@ -52,9 +53,10 @@ class RemoteFsSnapDriverTestCase(test.TestCase):
                                     self._fake_snapshot.id)
         self._fake_snapshot.volume = self._fake_volume
 
-    def _test_delete_snapshot(self, volume_in_use=False,
-                              stale_snapshot=False,
-                              is_active_image=True):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_delete_snapshot(self, volume_in_use=False,
+                             stale_snapshot=False,
+                             is_active_image=True):
         # If the snapshot is not the active image, it is guaranteed that
         # another snapshot exists having it as backing file.
 
@@ -218,7 +220,8 @@ class RemoteFsSnapDriverTestCase(test.TestCase):
         self._driver._execute.assert_any_call(*command1, run_as_root=True)
         self._driver._execute.assert_any_call(*command2, run_as_root=True)
 
-    def _test_create_snapshot(self, volume_in_use=False):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_create_snapshot(self, volume_in_use=False):
         fake_snapshot_info = {}
         fake_snapshot_file_name = os.path.basename(self._fake_snapshot_path)
 
@@ -355,11 +358,12 @@ class RemoteFsSnapDriverTestCase(test.TestCase):
             func=synchronized_func,
             expected_exception=exception.VolumeBackendAPIException)
 
+    @unittest.skip("Skip until bug #1578986 is fixed")
     @mock.patch.object(image_utils, 'qemu_img_info')
     @mock.patch('os.path.basename')
-    def _test_qemu_img_info(self, mock_basename,
-                            mock_qemu_img_info, backing_file, basedir,
-                            valid_backing_file=True):
+    def test_qemu_img_info(self, mock_basename,
+                           mock_qemu_img_info, backing_file, basedir,
+                           valid_backing_file=True):
         fake_vol_name = 'fake_vol_name'
         mock_info = mock_qemu_img_info.return_value
         mock_info.image = mock.sentinel.image_path

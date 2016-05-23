@@ -15,6 +15,7 @@
 
 from copy import deepcopy
 import sys
+import unittest
 
 import ddt
 import mock
@@ -824,7 +825,8 @@ class PureBaseVolumeDriverTestCase(PureBaseSharedDriverTestCase):
         self.assertFalse(self.array.list_host_connections.called)
         self.assertFalse(self.array.delete_host.called)
 
-    def _test_terminate_connection_with_error(self, mock_host, error):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_terminate_connection_with_error(self, mock_host, error):
         vol_name = VOLUME["name"] + "-cinder"
         mock_host.return_value = PURE_HOST.copy()
         self.array.reset_mock()
@@ -1533,8 +1535,9 @@ class PureBaseVolumeDriverTestCase(PureBaseSharedDriverTestCase):
                           self.driver.unmanage_snapshot,
                           SNAPSHOT)
 
-    def _test_retype_repl(self, mock_is_repl, is_vol_repl,
-                          repl_cabability, volume_id=None):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_retype_repl(self, mock_is_repl, is_vol_repl,
+                         repl_cabability, volume_id=None):
         mock_is_repl.return_value = is_vol_repl
         context = mock.MagicMock()
         volume = fake_volume.fake_volume_obj(context)

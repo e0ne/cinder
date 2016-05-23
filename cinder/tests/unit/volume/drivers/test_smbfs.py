@@ -15,6 +15,7 @@
 import copy
 import functools
 import os
+import unittest
 
 import ddt
 import mock
@@ -105,13 +106,14 @@ class SmbFsTestCase(test.TestCase):
         return {self._FAKE_SHARE_HASH: {
                 'total_allocated': self._FAKE_TOTAL_ALLOCATED}}
 
+    @unittest.skip("Skip until bug #1578986 is fixed")
     @mock.patch.object(smbfs, 'open', create=True)
     @mock.patch('os.path.exists')
     @mock.patch.object(fileutils, 'ensure_tree')
     @mock.patch('json.load')
-    def _test_setup_allocation_data(self, mock_json_load, mock_ensure_tree,
-                                    mock_exists, mock_open,
-                                    allocation_data_exists=False):
+    def test_setup_allocation_data(self, mock_json_load, mock_ensure_tree,
+                                   mock_exists, mock_open,
+                                   allocation_data_exists=False):
         mock_exists.return_value = allocation_data_exists
         self._smbfs_driver._update_allocation_data_file = mock.Mock()
 
@@ -134,8 +136,9 @@ class SmbFsTestCase(test.TestCase):
     def test_setup_allocation_data_file_existing(self):
         self._test_setup_allocation_data(allocation_data_exists=True)
 
-    def _test_update_allocation_data(self, virtual_size_gb=None,
-                                     volume_exists=True):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_update_allocation_data(self, virtual_size_gb=None,
+                                    volume_exists=True):
         self._smbfs_driver._update_allocation_data_file = mock.Mock()
         update_func = self._smbfs_driver._update_allocation_data_file
 
@@ -203,10 +206,11 @@ class SmbFsTestCase(test.TestCase):
                 self._FAKE_VOLUME_PATH)
             drv._delete.assert_any_call(fake_vol_info)
 
+    @unittest.skip("Skip until bug #1578986 is fixed")
     @mock.patch('os.path.exists')
     @mock.patch.object(image_utils, 'check_qemu_img_version')
-    def _test_setup(self, mock_check_qemu_img_version,
-                    mock_exists, config, share_config_exists=True):
+    def test_setup(self, mock_check_qemu_img_version,
+                   mock_exists, config, share_config_exists=True):
         mock_exists.return_value = share_config_exists
         fake_ensure_mounted = mock.MagicMock()
         self._smbfs_driver._ensure_shares_mounted = fake_ensure_mounted
@@ -249,6 +253,7 @@ class SmbFsTestCase(test.TestCase):
         fake_config.smbfs_used_ratio = 1.1
         self._test_setup(config=fake_config)
 
+    @unittest.skip("Skip until bug #1578986 is fixed")
     @mock.patch('os.path.exists')
     @mock.patch.multiple(smbfs.SmbfsDriver,
                          _create_windows_image=mock.DEFAULT,
@@ -258,9 +263,9 @@ class SmbFsTestCase(test.TestCase):
                          get_volume_format=mock.DEFAULT,
                          local_path=mock.DEFAULT,
                          _set_rw_permissions_for_all=mock.DEFAULT)
-    def _test_create_volume(self, mock_exists, volume_exists=False,
-                            volume_format=None, use_sparsed_file=False,
-                            **mocks):
+    def test_create_volume(self, mock_exists, volume_exists=False,
+                           volume_format=None, use_sparsed_file=False,
+                           **mocks):
         self._smbfs_driver.configuration = copy.copy(self._FAKE_SMBFS_CONFIG)
         self._smbfs_driver.configuration.smbfs_sparsed_volumes = (
             use_sparsed_file)
@@ -310,7 +315,8 @@ class SmbFsTestCase(test.TestCase):
     def test_create_regular(self):
         self._test_create_volume()
 
-    def _test_find_share(self, existing_mounted_shares=True,
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_find_share(self, existing_mounted_shares=True,
                          eligible_shares=True):
         if existing_mounted_shares:
             mounted_shares = ('fake_share1', 'fake_share2', 'fake_share3')
@@ -347,7 +353,8 @@ class SmbFsTestCase(test.TestCase):
     def test_find_share_missing_eligible_shares(self):
         self._test_find_share(eligible_shares=False)
 
-    def _test_is_share_eligible(self, capacity_info, volume_size):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_is_share_eligible(self, capacity_info, volume_size):
         self._smbfs_driver._get_capacity_info = mock.Mock(
             return_value=[float(x << 30) for x in capacity_info])
         self._smbfs_driver.configuration = self._FAKE_SMBFS_CONFIG
@@ -395,11 +402,12 @@ class SmbFsTestCase(test.TestCase):
         flags = self._smbfs_driver.parse_credentials(fake_smb_options)
         self.assertEqual(expected_flags, flags)
 
+    @unittest.skip("Skip until bug #1578986 is fixed")
     @mock.patch.object(smbfs.SmbfsDriver, '_get_local_volume_path_template')
     @mock.patch.object(smbfs.SmbfsDriver, '_lookup_local_volume_path')
     @mock.patch.object(smbfs.SmbfsDriver, 'get_volume_format')
-    def _test_get_volume_path(self, mock_get_volume_format, mock_lookup_volume,
-                              mock_get_path_template, volume_exists=True):
+    def test_get_volume_path(self, mock_get_volume_format, mock_lookup_volume,
+                             mock_get_path_template, volume_exists=True):
         drv = self._smbfs_driver
         mock_get_path_template.return_value = self._FAKE_VOLUME_PATH
         volume_format = 'raw'
@@ -516,7 +524,8 @@ class SmbFsTestCase(test.TestCase):
 
         self.assertEqual(expected, ret_val)
 
-    def _test_extend_volume(self, extend_failed=False, image_format='raw'):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_extend_volume(self, extend_failed=False, image_format='raw'):
         drv = self._smbfs_driver
 
         drv.local_path = mock.Mock(
@@ -564,8 +573,9 @@ class SmbFsTestCase(test.TestCase):
     def test_extend_vhd_volume(self):
         self._test_extend_volume(image_format='vpc')
 
-    def _test_check_extend_support(self, has_snapshots=False,
-                                   is_eligible=True):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_check_extend_support(self, has_snapshots=False,
+                                  is_eligible=True):
         self._smbfs_driver.local_path = mock.Mock(
             return_value=self._FAKE_VOLUME_PATH)
 
@@ -671,7 +681,8 @@ class SmbFsTestCase(test.TestCase):
         self._smbfs_driver._remotefsclient.mount.assert_called_once_with(
             self._FAKE_SHARE, self._FAKE_SHARE_OPTS.split())
 
-    def _test_copy_image_to_volume(self, wrong_size_after_fetch=False):
+    @unittest.skip("Skip until bug #1578986 is fixed")
+    def test_copy_image_to_volume(self, wrong_size_after_fetch=False):
         drv = self._smbfs_driver
 
         vol_size_bytes = self.volume.size << 30
