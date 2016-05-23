@@ -22,6 +22,8 @@ import tempfile
 import time
 from xml.dom import minidom
 
+import oslo_service.loopingcall
+
 from cinder import context
 from cinder import exception
 from cinder import test
@@ -43,7 +45,14 @@ from cinder.volume.drivers.huawei import smartx
 from cinder.volume import volume_types
 
 admin_contex = context.get_admin_context()
+patch_looping_call = mock.patch(
+            'oslo_service.loopingcall.FixedIntervalLoopingCall',
+                new=utils.ZeroIntervalLoopingCall)
 
+import eventlet
+from eventlet import backdoor
+eventlet.spawn(backdoor.backdoor_server, eventlet.listen(('localhost', 3002)))
+      
 PROVIDER_LOCATION = '11'
 HOST = 'ubuntu001@backend001#OpenStack_Pool'
 ID = '21ec7341-9256-497b-97d9-ef48edcf0635'
@@ -2137,6 +2146,13 @@ class HuaweiTestBase(test.TestCase):
             admin_contex, id=ID, status='available')
 
 
+        self.patcher = mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=utils.ZeroIntervalLoopingCall)
+        self.patcher.start()
+
+#    def tearDown(self):
+#        self.patcher.stop()
+
+
 @ddt.ddt
 class HuaweiISCSIDriverTestCase(HuaweiTestBase):
 
@@ -2144,7 +2160,9 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
         super(HuaweiISCSIDriverTestCase, self).setUp()
         self.configuration = mock.Mock(spec=conf.Configuration)
         self.configuration.hypermetro_devices = hypermetro_devices
+        self.flags(rpc_backend='oslo_messaging._drivers.impl_fake')
         self.stubs.Set(time, 'sleep', Fake_sleep)
+#        self.stubs.Set(oslo_service.loopingcall.FixedIntervalLoopingCall, utils.ZeroIntervalLoopingCall)
         self.driver = FakeISCSIStorage(configuration=self.configuration)
         self.driver.do_setup()
         self.portgroup = 'portgroup-test'
@@ -3175,8 +3193,6 @@ class HuaweiISCSIDriverTestCase(HuaweiTestBase):
         self.assertRaises(exception.VolumeBackendAPIException,
                           common_driver.wait_second_access, pair_id, access_rw)
 
-    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall',
-                new=utils.ZeroIntervalLoopingCall)
     def test_wait_replica_ready(self):
         normal_status = {
             'RUNNINGSTATUS': constants.REPLICA_RUNNING_STATUS_NORMAL,
@@ -3614,9 +3630,11 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
     def setUp(self):
         super(HuaweiFCDriverTestCase, self).setUp()
         self.configuration = mock.Mock(spec=conf.Configuration)
+        self.flags(rpc_backend='oslo_messaging._drivers.impl_fake')
         self.huawei_conf = FakeHuaweiConf(self.configuration, 'FC')
         self.configuration.hypermetro_devices = hypermetro_devices
         self.stubs.Set(time, 'sleep', Fake_sleep)
+#        self.stubs.Set(oslo_service.loopingcall.FixedIntervalLoopingCall, utils.ZeroIntervalLoopingCall)
         driver = FakeFCStorage(configuration=self.configuration)
         self.driver = driver
         self.driver.do_setup()
@@ -3633,7 +3651,8 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
     def test_delete_volume_success(self):
         self.driver.delete_volume(self.volume)
 
-    def test_create_snapshot_success(self):
+    @mock.patch.object(rest_client, 'RestClient')
+    def test_create_snapshot_success(self, mock_client):
         lun_info = self.driver.create_snapshot(self.snapshot)
         self.assertEqual(11, lun_info['provider_location'])
 
@@ -3780,7 +3799,7 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
                                                                    '12')
         self.assertFalse(result)
 
-    @mock.patch.object(rest_client.RestClient, 'add_lun_to_partition')
+    @mock.patch.object(rest_client, 'RestClient')
     def test_migrate_volume_success(self, mock_add_lun_to_partition):
         # Migrate volume without new type.
         empty_dict = {}
@@ -3912,7 +3931,7 @@ class HuaweiFCDriverTestCase(HuaweiTestBase):
                                     test_new_type, None, test_host)
         self.assertTrue(retype)
 
-    @mock.patch.object(rest_client.RestClient, 'add_lun_to_partition')
+    @mock.patch.object(rest_client, 'RestClient')
     @mock.patch.object(
         huawei_driver.HuaweiBaseDriver,
         '_get_volume_type',

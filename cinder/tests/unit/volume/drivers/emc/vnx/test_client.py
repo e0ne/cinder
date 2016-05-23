@@ -24,6 +24,10 @@ from cinder.volume.drivers.emc.vnx import client as vnx_client
 from cinder.volume.drivers.emc.vnx import common as vnx_common
 
 
+import eventlet
+from eventlet import backdoor
+eventlet.spawn(backdoor.backdoor_server, eventlet.listen(('localhost', 3001)))
+
 class TestCondition(test.TestCase):
     @res_mock.patch_client
     def test_is_lun_io_ready_false(self, client, mocked):

@@ -21,7 +21,7 @@ import time
 from xml.dom import minidom
 
 import mock
-from oslo_service import loopingcall
+import oslo_service.loopingcall
 from oslo_utils import units
 import six
 
@@ -29,6 +29,7 @@ from cinder import exception
 from cinder.i18n import _
 from cinder.objects import fields
 from cinder import test
+from cinder.tests.unit import utils
 
 from cinder.volume import configuration as conf
 from cinder.volume.drivers.emc import emc_vmax_common
@@ -43,6 +44,13 @@ from cinder.volume import volume_types
 
 CINDER_EMC_CONFIG_DIR = '/etc/cinder/'
 
+import eventlet
+from eventlet import backdoor
+eventlet.spawn(backdoor.backdoor_server, eventlet.listen(('localhost', 3000)))
+
+#patch_looping_call = mock.patch(
+#            'oslo_service.loopingcall.FixedIntervalLoopingCall',
+#                new=utils.ZeroIntervalLoopingCall)
 
 class EMC_StorageVolume(dict):
     pass
@@ -1721,7 +1729,7 @@ class EMCVMAXISCSIDriverNoFastTestCase(test.TestCase):
                        self.fake_sleep)
         self.stubs.Set(emc_vmax_utils.EMCVMAXUtils, 'isArrayV3',
                        self.fake_is_v3)
-
+#        self.stubs.Set(oslo_service.loopingcall.FixedIntervalLoopingCall, utils.ZeroIntervalLoopingCall)
         driver = emc_vmax_iscsi.EMCVMAXISCSIDriver(configuration=configuration)
         driver.db = FakeDB()
         self.driver = driver
@@ -2331,15 +2339,14 @@ class EMCVMAXISCSIDriverNoFastTestCase(test.TestCase):
         self.driver.utils._is_job_finished.reset_mock()
 
         # Save the original state and restore it after this test
-        loopingcall_orig = loopingcall.FixedIntervalLoopingCall
-        loopingcall.FixedIntervalLoopingCall = mock.Mock()
+#        loopingcall_orig = loopingcall.FixedIntervalLoopingCall
+#        loopingcall.FixedIntervalLoopingCall = mock.Mock()
         rc, errordesc = self.driver.utils.wait_for_job_complete(conn, myjob)
         self.assertEqual(0, rc)
         self.assertIsNone(errordesc)
-        loopingcall.FixedIntervalLoopingCall.assert_called_once_with(
-            mock.ANY)
-        loopingcall.FixedIntervalLoopingCall.reset_mock()
-        loopingcall.FixedIntervalLoopingCall = loopingcall_orig
+#        loopingcall.FixedIntervalLoopingCall.assert_called_once_with(
+#            mock.ANY)
+#        loopingcall.FixedIntervalLoopingCall.reset_mock()
 
     def test_wait_for_job_complete_bad_job_state(self):
         myjob = SE_ConcreteJob()
@@ -2371,16 +2378,15 @@ class EMCVMAXISCSIDriverNoFastTestCase(test.TestCase):
         self.assertTrue(self.driver.utils._is_sync_complete.return_value)
         self.driver.utils._is_sync_complete.reset_mock()
 
-        # Save the original state and restore it after this test
-        loopingcall_orig = loopingcall.FixedIntervalLoopingCall
-        loopingcall.FixedIntervalLoopingCall = mock.Mock()
+#        loopingcall.FixedIntervalLoopingCall = mock.Mock()
         rc = self.driver.utils.wait_for_sync(conn, mysync)
         self.assertIsNotNone(rc)
-        loopingcall.FixedIntervalLoopingCall.assert_called_once_with(
-            mock.ANY)
-        loopingcall.FixedIntervalLoopingCall.reset_mock()
-        loopingcall.FixedIntervalLoopingCall = loopingcall_orig
+#        loopingcall.FixedIntervalLoopingCall.assert_called_once_with(
+#            mock.ANY)
+#        loopingcall.FixedIntervalLoopingCall.reset_mock()
+#        loopingcall.FixedIntervalLoopingCall = loopingcall_orig
 
+#    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', utils.ZeroIntervalLoopingCall)
     def test_wait_for_sync_extra_specs(self):
         mysync = 'fakesync'
         conn = self.fake_ecom_connection()
@@ -2408,14 +2414,14 @@ class EMCVMAXISCSIDriverNoFastTestCase(test.TestCase):
         self.driver.utils._is_sync_complete.reset_mock()
 
         # Save the original state and restore it after this test
-        loopingcall_orig = loopingcall.FixedIntervalLoopingCall
-        loopingcall.FixedIntervalLoopingCall = mock.Mock()
+#        loopingcall_orig = loopingcall.FixedIntervalLoopingCall
+#        loopingcall.FixedIntervalLoopingCall = mock.Mock()
         rc = self.driver.utils.wait_for_sync(conn, mysync)
         self.assertIsNotNone(rc)
-        loopingcall.FixedIntervalLoopingCall.assert_called_once_with(
-            mock.ANY)
-        loopingcall.FixedIntervalLoopingCall.reset_mock()
-        loopingcall.FixedIntervalLoopingCall = loopingcall_orig
+#        loopingcall.FixedIntervalLoopingCall.assert_called_once_with(
+#            mock.ANY)
+ #       loopingcall.FixedIntervalLoopingCall.reset_mock()
+ #       loopingcall.FixedIntervalLoopingCall = loopingcall_orig
         bExists = os.path.exists(file_name)
         if bExists:
             os.remove(file_name)
@@ -3326,6 +3332,8 @@ class EMCVMAXISCSIDriverNoFastTestCase(test.TestCase):
                           self.driver.create_snapshot,
                           self.data.test_volume)
 
+#    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+#                            utils.ZeroIntervalLoopingCall)
     @mock.patch.object(
         emc_vmax_utils.EMCVMAXUtils,
         'get_meta_members_capacity_in_byte',
@@ -3344,6 +3352,7 @@ class EMCVMAXISCSIDriverNoFastTestCase(test.TestCase):
         return_value={'volume_backend_name': 'ISCSINoFAST'})
     def test_create_volume_from_same_size_meta_snapshot(
             self, mock_volume_type, mock_sync_sv, mock_meta, mock_size):
+#        import pdb;pdb.set_trace()
         self.data.test_volume['volume_name'] = "vmax-1234567"
         self.driver.create_volume_from_snapshot(
             self.data.test_volume, self.data.test_volume)
@@ -3868,6 +3877,11 @@ class EMCVMAXISCSIDriverFastTestCase(test.TestCase):
         driver = emc_vmax_iscsi.EMCVMAXISCSIDriver(configuration=configuration)
         driver.db = FakeDB()
         self.driver = driver
+        self.patcher = mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=utils.ZeroIntervalLoopingCall)
+        self.patcher.start()
+
+#    def tearDown(self):
+#        self.patcher.stop()
 
     def create_fake_config_file_fast(self):
 
@@ -4233,6 +4247,10 @@ class EMCVMAXISCSIDriverFastTestCase(test.TestCase):
 
     @mock.patch.object(
         emc_vmax_utils.EMCVMAXUtils,
+        'wait_for_job_complete',
+        return_value=(0, 'success'))
+    @mock.patch.object(
+        emc_vmax_utils.EMCVMAXUtils,
         'get_meta_members_capacity_in_byte',
         return_value=[1234567])
     @mock.patch.object(
@@ -4248,7 +4266,8 @@ class EMCVMAXISCSIDriverFastTestCase(test.TestCase):
         'get_volume_type_extra_specs',
         return_value={'volume_backend_name': 'ISCSIFAST'})
     def test_create_volume_from_same_size_meta_snapshot(
-            self, mock_volume_type, mock_sync_sv, mock_meta, mock_size):
+            self, mock_volume_type, mock_sync_sv, mock_meta, mock_size, mock_wait):
+#        import pdb;pdb.set_trace()
         self.data.test_volume['volume_name'] = "vmax-1234567"
         common = self.driver.common
         common.fast.is_volume_in_default_SG = mock.Mock(return_value=True)
@@ -5054,6 +5073,7 @@ class EMCVMAXFCDriverFastTestCase(test.TestCase):
         self.create_fake_config_file_fast()
         self.addCleanup(self._cleanup)
 
+        self.flags(rpc_backend='oslo_messaging._drivers.impl_fake')
         configuration = mock.Mock()
         configuration.cinder_emc_config_file = self.config_file_path
         configuration.safe_get.return_value = 'FCFAST'
@@ -5068,7 +5088,7 @@ class EMCVMAXFCDriverFastTestCase(test.TestCase):
                        self.fake_sleep)
         self.stubs.Set(emc_vmax_utils.EMCVMAXUtils, 'isArrayV3',
                        self.fake_is_v3)
-
+#        self.stubs.Set(oslo_service.loopingcall.FixedIntervalLoopingCall, utils.ZeroIntervalLoopingCall)
         driver = emc_vmax_fc.EMCVMAXFCDriver(configuration=configuration)
         driver.db = FakeDB()
         driver.common.conn = FakeEcomConnection()
@@ -5468,6 +5488,7 @@ class EMCVMAXFCDriverFastTestCase(test.TestCase):
         return_value={'volume_backend_name': 'FCFAST'})
     def test_create_volume_from_same_size_meta_snapshot(
             self, mock_volume_type, mock_sync_sv, mock_meta, mock_size):
+#        import pdb;pdb.set_trace()
         self.data.test_volume['volume_name'] = "vmax-1234567"
         common = self.driver.common
         common.fast.is_volume_in_default_SG = mock.Mock(return_value=True)
@@ -5710,6 +5731,7 @@ class EMCV3DriverTestCase(test.TestCase):
         self.data = EMCVMAXCommonData()
 
         self.data.storage_system = 'SYMMETRIX-+-000197200056'
+        self.flags(rpc_backend='oslo_messaging._drivers.impl_fake')
 
         self.tempdir = tempfile.mkdtemp()
         super(EMCV3DriverTestCase, self).setUp()
@@ -5733,6 +5755,10 @@ class EMCV3DriverTestCase(test.TestCase):
                        self.fake_sleep)
         self.stubs.Set(emc_vmax_utils.EMCVMAXUtils, 'isArrayV3',
                        self.fake_is_v3)
+#        self.stubs.Set(oslo_service.loopingcall.FixedIntervalLoopingCall, utils.ZeroIntervalLoopingCall)
+        self.patcher = mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', new=
+                                utils.ZeroIntervalLoopingCall)
+        self.patcher.start()
 
         driver = emc_vmax_fc.EMCVMAXFCDriver(configuration=configuration)
         driver.db = FakeDB()
@@ -6045,6 +6071,7 @@ class EMCV3DriverTestCase(test.TestCase):
             return_value=self.default_extraspec())
         self.driver.delete_snapshot(self.data.test_volume_v3)
 
+#    @mock.patch('oslo_service.loopingcall.FixedIntervalLoopingCall', utils.ZeroIntervalLoopingCall)
     @mock.patch.object(
         emc_vmax_common.EMCVMAXCommon,
         '_get_pool_and_storage_system',

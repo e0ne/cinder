@@ -287,6 +287,7 @@ class EMCVMAXUtils(object):
         :raises: VolumeBackendAPIException
         """
 
+#        import pdb;pdb.set_trace()
         def _wait_for_job_complete():
             # Called at an interval until the job is finished.
             retries = kwargs['retries']
@@ -423,6 +424,7 @@ class EMCVMAXUtils(object):
         :raises: loopingcall.LoopingCallDone
         :raises: VolumeBackendAPIException
         """
+#        import pdb;pdb.set_trace()
 
         def _wait_for_sync():
             """Called at an interval until the synchronization is finished.
