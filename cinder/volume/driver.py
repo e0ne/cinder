@@ -93,7 +93,7 @@ volume_opts = [
     cfg.StrOpt('iscsi_helper',
                default='tgtadm',
                choices=['tgtadm', 'lioadm', 'scstadmin', 'iscsictl',
-                        'ietadm', 'fake'],
+                        'ietadm', 'fake', 'local_tgtadm'],
                help='iSCSI target user-land tool to use. tgtadm is default, '
                     'use lioadm for LIO iSCSI support, scstadmin for SCST '
                     'target support, ietadm for iSCSI Enterprise Target, '
@@ -350,6 +350,7 @@ class BaseVD(object):
             'ietadm': 'cinder.volume.targets.iet.IetAdm',
             'lioadm': 'cinder.volume.targets.lio.LioAdm',
             'tgtadm': 'cinder.volume.targets.tgt.TgtAdm',
+            'local_tgtadm': 'cinder.volume.targets.local_tgt.LocalTgtAdm',
             'scstadmin': 'cinder.volume.targets.scst.SCSTAdm',
             'iscsictl': 'cinder.volume.targets.cxt.CxtAdm'}
 
