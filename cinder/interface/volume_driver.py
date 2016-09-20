@@ -83,7 +83,6 @@ class VolumeDriverCore(base.CinderInterface):
             But, it is recommended to report real values as the Cinder
             scheduler assigns lowest weight to any storage backend reporting
             'unknown' or 'infinite'.
-
         * free_capacity_gb
             The free capacity in gigabytes (GiB). Use keyword 'unknown' if the
             backend cannot report the value or 'infinite' if there is no upper
