@@ -16,12 +16,25 @@ Driver for NVMeoE specification.
 """
 
 from os_brick.target.nvme.rpc import resources
+from oslo_config import cfg
 from oslo_log import log as logging
 
 from cinder import interface
 from cinder.volume import driver
 
 LOG = logging.getLogger(__name__)
+
+volume_opts = [
+    cfg.StrOpt('target_ip',
+               default='127.0.0.1',
+               help='NVMe Target node IP'),
+    cfg.IntOpt('target_port',
+               default=5260,
+               help='NVMe Target node port')
+]
+
+CONF = cfg.CONF
+CONF.register_opts(volume_opts)
 
 
 @interface.volumedriver
@@ -30,6 +43,7 @@ class NVMeDriver(driver.VolumeDriver):
     VERSION = '0.0.1'
     # ThirdPartySystems wiki page
     CI_WIKI_NAME = "NVMe_CI"
+    PROTOCOL = 'rdma'
 
     def __init__(self, *args, **kwargs):
         super(NVMeDriver, self).__init__(*args, **kwargs)
@@ -51,24 +65,21 @@ class NVMeDriver(driver.VolumeDriver):
             LOG.error(
                 'Problem with volume %s deletion: %s', name, e['message'])
 
-    def attache_volume(self):
-        pass
-
-    def detach_volume(self):
-        pass
-
     def initialize_connection(self, volume, connector):
-        pass
-
-    def terminate_connection(self, volume, connector, **kwargs):
-        pass
+        return {
+            'driver_volume_type': self.PROTOCOL,
+            'data': {
+                'target_ip': self.conf.target_ip,
+                'target_port': self.conf.target_port
+            }
+        }
 
     def get_volume_stats(self):
         return {
             'volume_backend_name': '',
             'vendor_name': '',
             'driver_version': self.VERSION,
-            'storage_protocol': 'iSCSI',
+            'storage_protocol': self.PROTOCOL,
             'total_capacity_gb': '',
             'free_capacity_gb': ''
         }
