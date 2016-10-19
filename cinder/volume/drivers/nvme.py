@@ -76,12 +76,7 @@ class NVMeDriver(driver.VolumeDriver):
         return {'provider_location': nqns[0]}
 
     def delete_volume(self, volume):
-        name = volume['name']
-        try:
-            self.target.delete_lun(name)
-        except Exception as e:
-            LOG.error(
-                'Problem with volume %s deletion: %s', name, e['message'])
+        # TODO (e0ne): add volume cleanup
 
     def initialize_connection(self, volume, connector):
         return {
