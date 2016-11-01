@@ -77,6 +77,9 @@ class NVMeDriver(driver.VolumeDriver):
 
     def delete_volume(self, volume):
         # TODO (e0ne): add volume cleanup
+        volume['provider_location'] = None
+        volume.save()
+        return
 
     def initialize_connection(self, volume, connector):
         return {
