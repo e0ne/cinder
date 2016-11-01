@@ -26,17 +26,20 @@ from cinder.volume import driver
 
 LOG = logging.getLogger(__name__)
 
-volume_opts = [
+nvme_opts = [
     cfg.StrOpt('target_ip',
                default='127.0.0.1',
                help='NVMe Target node IP'),
     cfg.IntOpt('target_port',
-               default=4430,
-               help='NVMe Target node port')
+               default=4420,
+               help='NVMe Target node port'),
+    cfg.IntOpt('target_rpc_port',
+               default=5260,
+               help='NVMe Target RPC port'),
 ]
 
 CONF = cfg.CONF
-CONF.register_opts(volume_opts)
+CONF.register_opts(nvme_opts)
 
 
 @interface.volumedriver
@@ -49,8 +52,8 @@ class NVMeDriver(driver.VolumeDriver):
 
     def __init__(self, *args, **kwargs):
         super(NVMeDriver, self).__init__(*args, **kwargs)
-#        self.target = resources.NVMeTargetObject(self.configuration.target_ip, self.configuration.target_port)
-        self.target = resources.NVMeTargetObject('10.100.1.95', 5260)
+        self.configuration.append_config_values(nvme_opts)
+        self.target = resources.NVMeTargetObject(self.configuration.target_ip, self.configuration.target_rpc_port)
         self.backend_name = 'NVMe'
 
     def check_for_setup_error(self):
@@ -85,8 +88,8 @@ class NVMeDriver(driver.VolumeDriver):
         return {
             'driver_volume_type': self.PROTOCOL,
             'data': {
-                'target_portal': '10.100.1.95',
-                'target_port': 4420,
+                'target_portal': self.configuration.target_ip,
+                'target_port': self.configuration.target_port,
                 'nqn': volume['provider_location']
             }
         }
@@ -110,9 +113,9 @@ class NVMeDriver(driver.VolumeDriver):
 
     def create_export(self, context, volume, connector):
         return {
-            'target_portal': '10.100.1.95',
+            'target_portal': self.configuration.target_ip,
             'nqn':  volume['provider_location'],
-            'target_port': 4420
+            'target_port': self.configuration.target_port
         }
 
     def remove_export(self, context, volume):
