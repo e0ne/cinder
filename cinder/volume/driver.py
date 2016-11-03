@@ -86,10 +86,11 @@ volume_opts = [
                help='The flag to pass to ionice to alter the i/o priority '
                     'of the process used to zero a volume after deletion, '
                     'for example "-c3" for idle only priority.'),
+    # TODO(apopovych): change from iscsi_helper to target_helper
     cfg.StrOpt('iscsi_helper',
                default='tgtadm',
                choices=['tgtadm', 'lioadm', 'scstadmin', 'iscsictl',
-                        'ietadm', 'fake'],
+                        'ietadm', 'fake', 'rdma'],
                help='iSCSI target user-land tool to use. tgtadm is default, '
                     'use lioadm for LIO iSCSI support, scstadmin for SCST '
                     'target support, ietadm for iSCSI Enterprise Target, '
@@ -352,7 +353,8 @@ class BaseVD(object):
             'lioadm': 'cinder.volume.targets.lio.LioAdm',
             'tgtadm': 'cinder.volume.targets.tgt.TgtAdm',
             'scstadmin': 'cinder.volume.targets.scst.SCSTAdm',
-            'iscsictl': 'cinder.volume.targets.cxt.CxtAdm'}
+            'iscsictl': 'cinder.volume.targets.cxt.CxtAdm',
+            'rdma': 'cinder.volume.targets.rdma.RDMATarget'}
 
         # set True by manager after successful check_for_setup
         self._initialized = False
