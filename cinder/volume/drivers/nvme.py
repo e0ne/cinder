@@ -18,9 +18,12 @@ Driver for NVMeoE specification.
 from os_brick.target.nvme.rpc import resources
 from oslo_config import cfg
 from oslo_log import log as logging
+from oslo_utils import importutils
 
 from cinder import context
+from cinder import exception
 from cinder.db.sqlalchemy import api
+from cinder.i18n import _
 from cinder import interface
 from cinder.volume import driver
 
@@ -48,16 +51,23 @@ class NVMeDriver(driver.VolumeDriver):
     VERSION = '0.0.1'
     # ThirdPartySystems wiki page
     CI_WIKI_NAME = "NVMe_CI"
-    PROTOCOL = 'rdma'
 
     def __init__(self, *args, **kwargs):
         super(NVMeDriver, self).__init__(*args, **kwargs)
         self.configuration.append_config_values(nvme_opts)
         self.target = resources.NVMeTargetObject(self.configuration.target_ip, self.configuration.target_rpc_port)
         self.backend_name = 'NVMe'
+        target_driver = \
+            self.target_mapping[self.configuration.safe_get('iscsi_helper')]
+
+        self.target_driver = importutils.import_object(
+            target_driver,
+            configuration=self.configuration,
+            db=self.db,
+            executor=self._execute)
 
     def check_for_setup_error(self):
-        nvmfs = self.target.get_nvmf_subsystems(None)
+        self.target.get_nvmf_subsystems(None)
 
     def create_volume(self, volume):
         all_subsystems = self.target.get_nvmf_subsystems(None)
@@ -65,7 +75,6 @@ class NVMeDriver(driver.VolumeDriver):
         lst = api.volume_get_all_by_host(context.get_admin_context(),
                                          self.host)
         nqns = [subsystem['nqn'] for subsystem in nvme_subsystems]
-        name = volume['name']
         for vol in lst:
             if volume['provider_location']:
                 if volume['provider_location'] in nqns:
@@ -84,16 +93,6 @@ class NVMeDriver(driver.VolumeDriver):
         volume.save()
         return
 
-    def initialize_connection(self, volume, connector):
-        return {
-            'driver_volume_type': self.PROTOCOL,
-            'data': {
-                'target_portal': self.configuration.target_ip,
-                'target_port': self.configuration.target_port,
-                'nqn': volume['provider_location']
-            }
-        }
-
     def get_volume_stats(self, refresh=False):
         data = {
             'volume_backend_name': self.backend_name,
@@ -109,19 +108,22 @@ class NVMeDriver(driver.VolumeDriver):
             'QoS_support': False}
 
         data['pools'].append(single_pool)
+
         return data
 
-    def create_export(self, context, volume, connector):
-        return {
-            'target_portal': self.configuration.target_ip,
-            'nqn':  volume['provider_location'],
-            'target_port': self.configuration.target_port
-        }
+    def initialize_connection(self, volume, connector):
+        return self.target_driver.initialize_connection(volume, connector)
+
+    def create_export(self, context, volume, connector, vg=None):
+        if vg is None:
+            vg = self.configuration.volume_group
+
+        volume_path = "/dev/%s/%s" % (vg, volume['name'])
+
+        return self.target_driver.create_export(context, volume, volume_path)
 
     def remove_export(self, context, volume):
-        volume['provider_location'] = None
-        # TODO (e0ne): fix save call
-        # volume.save()
+        self.target_driver.remove_export(context, volume)
 
     def ensure_export(self, context, volume):
         pass
