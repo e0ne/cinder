@@ -1894,7 +1894,7 @@ class EMCVMAXUtils(object):
         kwargs['EcomCACert'] = connargs['EcomCACert']
         kwargs['EcomNoVerification'] = connargs['EcomNoVerification']
 
-        slo = self._process_tag(element, 'SLO')
+        slo = self._process_tag(element, 'ServiceLevel')
         kwargs['SLO'] = slo
         workload = self._process_tag(element, 'Workload')
         if workload is None and slo:
@@ -2107,10 +2107,6 @@ class EMCVMAXUtils(object):
         """
         portgroupname = (
             portgroupnames[random.randint(0, len(portgroupnames) - 1)])
-
-        LOG.info(_LI("Returning random Port Group: "
-                     "%(portGroupName)s."),
-                 {'portGroupName': portgroupname})
 
         return portgroupname
 
@@ -2660,7 +2656,7 @@ class EMCVMAXUtils(object):
     def override_ratio(self, max_over_sub_ratio, max_sub_ratio_from_per):
         """Override ratio if necessary
 
-        The over subscription ratio will be overriden if the max subscription
+        The over subscription ratio will be overridden if the max subscription
         percent is less than the user supplied max oversubscription ratio.
 
         :param max_over_sub_ratio: user supplied over subscription ratio

@@ -805,11 +805,12 @@ class LVMVolumeDriverTestCase(test_volume.DriverTestCase):
         res = self.volume.driver.get_manageable_volumes(cinder_vols, None,
                                                         1000, 0,
                                                         ['size'], ['asc'])
-        exp = [{'size': 2, 'reason_not_safe': None, 'extra_info': None,
+        exp = [{'size': 2, 'reason_not_safe': 'already managed',
+                'extra_info': None,
                 'reference': {'source-name':
                               'volume-00000000-0000-0000-0000-000000000000'},
                 'cinder_id': '00000000-0000-0000-0000-000000000000',
-                'safe_to_manage': False, 'reason_not_safe': 'already managed'},
+                'safe_to_manage': False},
                {'size': 3, 'reason_not_safe': 'volume in use',
                 'reference': {'source-name':
                               'volume-00000000-0000-0000-0000-000000000001'},
@@ -905,7 +906,7 @@ class LVMISCSITestCase(test_volume.DriverTestCase):
             vol = {}
             vol['size'] = 0
             vol_ref = db.volume_create(self.context, vol)
-            self.volume.create_volume(self.context, vol_ref['id'])
+            self.volume.create_volume(self.context, vol_ref)
             vol_ref = db.volume_get(self.context, vol_ref['id'])
 
             # each volume has a different mountpoint

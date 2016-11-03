@@ -16,7 +16,7 @@
 import mock
 
 from cinder import test
-from cinder.volume.drivers.infortrend.eonstor_ds_cli import cli_factory as cli
+from cinder.volume.drivers.infortrend.raidcmd_cli import cli_factory as cli
 
 
 class InfortrendCLITestData(object):
@@ -2019,9 +2019,6 @@ class InfortrendCLITestCase(test.TestCase):
     def __init__(self, *args, **kwargs):
         super(InfortrendCLITestCase, self).__init__(*args, **kwargs)
         self.cli_data = InfortrendCLITestData()
-
-    def setUp(self):
-        super(InfortrendCLITestCase, self).setUp()
 
     def _cli_set(self, cli, fake_result):
         cli_conf = {

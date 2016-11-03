@@ -19,22 +19,27 @@ from os_brick.target.nvme.rpc import resources
 from oslo_config import cfg
 from oslo_log import log as logging
 
+from cinder import context
+from cinder.db.sqlalchemy import api
 from cinder import interface
 from cinder.volume import driver
 
 LOG = logging.getLogger(__name__)
 
-volume_opts = [
+nvme_opts = [
     cfg.StrOpt('target_ip',
                default='127.0.0.1',
                help='NVMe Target node IP'),
     cfg.IntOpt('target_port',
+               default=4420,
+               help='NVMe Target node port'),
+    cfg.IntOpt('target_rpc_port',
                default=5260,
-               help='NVMe Target node port')
+               help='NVMe Target RPC port'),
 ]
 
 CONF = cfg.CONF
-CONF.register_opts(volume_opts)
+CONF.register_opts(nvme_opts)
 
 
 @interface.volumedriver
@@ -47,39 +52,76 @@ class NVMeDriver(driver.VolumeDriver):
 
     def __init__(self, *args, **kwargs):
         super(NVMeDriver, self).__init__(*args, **kwargs)
-        self.target = resources.NVMeTargetObject()
+        self.configuration.append_config_values(nvme_opts)
+        self.target = resources.NVMeTargetObject(self.configuration.target_ip, self.configuration.target_rpc_port)
+        self.backend_name = 'NVMe'
+
+    def check_for_setup_error(self):
+        nvmfs = self.target.get_nvmf_subsystems(None)
 
     def create_volume(self, volume):
+        all_subsystems = self.target.get_nvmf_subsystems(None)
+        nvme_subsystems = filter(lambda x: x['subtype'] == 'NVMe', all_subsystems)
+        lst = api.volume_get_all_by_host(context.get_admin_context(),
+                                         self.host)
+        nqns = [subsystem['nqn'] for subsystem in nvme_subsystems]
         name = volume['name']
-        try:
-            self.target.construct_aio_lun(name)
-        except Exception as e:
-            LOG.error(
-                'Problem with volume %s creation: %s', name, e['message'])
+        for vol in lst:
+            if volume['provider_location']:
+                if volume['provider_location'] in nqns:
+                    nqns.remove(volume['provider_location'])
+
+        if not len(nqns):
+            raise exception.CinderException(_("No free subsystem"))
+
+        volume['provider_location'] = nqns[0]
+        volume.save()
+        return {'provider_location': nqns[0]}
 
     def delete_volume(self, volume):
-        name = volume['name']
-        try:
-            self.target.delete_lun(name)
-        except Exception as e:
-            LOG.error(
-                'Problem with volume %s deletion: %s', name, e['message'])
+        # TODO (e0ne): add volume cleanup
+        volume['provider_location'] = None
+        volume.save()
+        return
 
     def initialize_connection(self, volume, connector):
         return {
             'driver_volume_type': self.PROTOCOL,
             'data': {
-                'target_ip': self.conf.target_ip,
-                'target_port': self.conf.target_port
+                'target_portal': self.configuration.target_ip,
+                'target_port': self.configuration.target_port,
+                'nqn': volume['provider_location']
             }
         }
 
-    def get_volume_stats(self):
-        return {
-            'volume_backend_name': '',
-            'vendor_name': '',
+    def get_volume_stats(self, refresh=False):
+        data = {
+            'volume_backend_name': self.backend_name,
+            'vendor_name': "Intel",
             'driver_version': self.VERSION,
-            'storage_protocol': self.PROTOCOL,
-            'total_capacity_gb': '',
-            'free_capacity_gb': ''
+            'storage_protocol': 'rdma',
+            'pools': []}
+
+        single_pool = {
+            'pool_name': data['volume_backend_name'],
+            'total_capacity_gb': 'infinite',
+            'free_capacity_gb': 'infinite',
+            'QoS_support': False}
+
+        data['pools'].append(single_pool)
+        return data
+
+    def create_export(self, context, volume, connector):
+        return {
+            'target_portal': self.configuration.target_ip,
+            'nqn':  volume['provider_location'],
+            'target_port': self.configuration.target_port
         }
+
+    def remove_export(self, context, volume):
+        volume['provider_location'] = None
+        # TODO (e0ne): fix save call
+        # volume.save()
+
+    def ensure_export(self, context, volume):
+        pass

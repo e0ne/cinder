@@ -443,15 +443,6 @@ def check_no_log_audit(logical_line):
         yield(0, "C304: Found LOG.audit.  Use LOG.info instead.")
 
 
-def check_no_contextlib_nested(logical_line):
-    msg = ("C305: contextlib.nested is deprecated. With Python 2.7 and later "
-           "the with-statement supports multiple nested objects. See https://"
-           "docs.python.org/2/library/contextlib.html#contextlib.nested "
-           "for more information.")
-    if no_contextlib_nested.match(logical_line):
-        yield(0, msg)
-
-
 def check_timeutils_strtime(logical_line):
     msg = ("C306: Found timeutils.strtime(). "
            "Please use datetime.datetime.isoformat() or datetime.strftime()")
@@ -481,9 +472,6 @@ def check_timeutils_isotime(logical_line):
 
 def no_test_log(logical_line, filename, noqa):
     if "cinder/tests" not in filename or noqa:
-        return
-    # Skip the "integrated" tests for now
-    if "cinder/tests/unit/integrated" in filename:
         return
     msg = "C309: Unit tests should not perform logging."
     if logging_instance.match(logical_line):
@@ -520,7 +508,6 @@ def factory(register):
     register(check_unicode_usage)
     register(check_no_print_statements)
     register(check_no_log_audit)
-    register(check_no_contextlib_nested)
     register(no_log_warn)
     register(dict_constructor_with_list_copy)
     register(no_test_log)

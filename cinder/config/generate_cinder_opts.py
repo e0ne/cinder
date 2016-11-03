@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import os
 import subprocess
 import textwrap
@@ -22,7 +23,7 @@ BASEDIR = os.path.split(os.path.realpath(__file__))[0] + "/../../"
 if __name__ == "__main__":
     os.chdir(BASEDIR)
     opt_file = open("cinder/opts.py", 'w')
-    opt_dict = {}
+    opt_dict = collections.OrderedDict()
     dir_trees_list = []
     REGISTER_OPTS_STR = "CONF.register_opts("
     REGISTER_OPT_STR = "CONF.register_opt("
@@ -179,8 +180,10 @@ if __name__ == "__main__":
                 formatted_opt = _retrieve_name(aline[: group_exists])
                 formatted_opt = formatted_opt.replace(')', '').strip()
                 if group_exists != -1:
-                    group_name = aline[group_exists:-1].replace(', group=\"\'', '').\
-                        replace(', group=', '').strip("\'\")").upper()
+                    group_name = aline[group_exists:-1].replace(
+                        ', group=\"\'', '').replace(
+                        ', group=', '').strip(
+                        "\'\")").upper()
                     if group_name in registered_opts_dict:
                         line = key + "." + formatted_opt
                         registered_opts_dict[group_name].append(line)
@@ -191,20 +194,20 @@ if __name__ == "__main__":
                     line = key + "." + formatted_opt
                     registered_opts_dict['DEFAULT'].append(line)
 
-setup_str = ("\n\n"
-             "def list_opts():\n"
-             "    return [\n")
-opt_file.write(setup_str)
+    setup_str = ("\n\n"
+                 "def list_opts():\n"
+                 "    return [\n")
+    opt_file.write(setup_str)
 
-for key in registered_opts_dict:
-    section_start_str = ("        ('" + key + "',\n"
-                         "            itertools.chain(\n")
-    opt_file.write(section_start_str)
-    for item in registered_opts_dict[key]:
-        _write_item(item)
-    section_end_str = "            )),\n"
-    opt_file.write(section_end_str)
+    for key in registered_opts_dict:
+        section_start_str = ("        ('" + key + "',\n"
+                             "            itertools.chain(\n")
+        opt_file.write(section_start_str)
+        for item in registered_opts_dict[key]:
+            _write_item(item)
+        section_end_str = "            )),\n"
+        opt_file.write(section_end_str)
 
-closing_str = ("    ]\n")
-opt_file.write(closing_str)
-opt_file.close()
+    closing_str = ("    ]\n")
+    opt_file.write(closing_str)
+    opt_file.close()

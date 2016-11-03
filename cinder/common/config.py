@@ -84,7 +84,7 @@ global_opts = [
                     'value (None) is supplied here, the glanceclient default '
                     'value is used.'),
     cfg.BoolOpt('enable_v1_api',
-                default=True,
+                default=False,
                 deprecated_for_removal=True,
                 help="DEPRECATED: Deploy v1 of the Cinder API."),
     cfg.BoolOpt('enable_v2_api',
@@ -175,9 +175,6 @@ global_opts = [
     cfg.StrOpt('transfer_api_class',
                default='cinder.transfer.api.API',
                help='The full class name of the volume transfer API class'),
-    cfg.StrOpt('replication_api_class',
-               default='cinder.replication.api.API',
-               help='The full class name of the volume replication API class'),
     cfg.StrOpt('consistencygroup_api_class',
                default='cinder.consistencygroup.api.API',
                help='The full class name of the consistencygroup API class'),
@@ -195,7 +192,7 @@ global_opts = [
     cfg.StrOpt('os_privileged_user_tenant',
                help='Tenant name associated with the OpenStack privileged '
                     'account.'),
-    cfg.StrOpt('os_privileged_user_auth_url',
+    cfg.URIOpt('os_privileged_user_auth_url',
                help='Auth URL associated with the OpenStack privileged '
                     'account.'),
 ]

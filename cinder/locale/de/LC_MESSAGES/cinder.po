@@ -8,16 +8,17 @@
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2011
 # Andreas Jaeger <jaegerandi@gmail.com>, 2016. #zanata
 # Monika Wolf <vcomas3@de.ibm.com>, 2016. #zanata
+# Robert Simai <robert.simai@suse.com>, 2016. #zanata
 msgid ""
 msgstr ""
-"Project-Id-Version: cinder 9.0.0.0b4.dev139\n"
+"Project-Id-Version: cinder 9.0.0.0rc2.dev243\n"
 "Report-Msgid-Bugs-To: https://bugs.launchpad.net/openstack-i18n/\n"
-"POT-Creation-Date: 2016-09-14 04:25+0000\n"
+"POT-Creation-Date: 2016-10-14 23:32+0000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"PO-Revision-Date: 2016-06-01 11:06+0000\n"
-"Last-Translator: Andreas Jaeger <jaegerandi@gmail.com>\n"
+"PO-Revision-Date: 2016-10-13 10:55+0000\n"
+"Last-Translator: Robert Simai <robert.simai@suse.com>\n"
 "Language: de\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.0\n"
@@ -1623,10 +1624,6 @@ msgid "Could not load paste app '%(name)s' from %(path)s"
 msgstr "paste-App '%(name)s' konnte nicht aus %(path)s geladen werden."
 
 #, python-format
-msgid "Could not read %s. Re-running with sudo"
-msgstr "%s konnte nicht gelesen werden. Wiederholte Ausführung mit sudo"
-
-#, python-format
 msgid ""
 "Could not read information for snapshot %(name)s. Code: %(code)s. Reason: "
 "%(reason)s"
@@ -2737,10 +2734,6 @@ msgstr "Beim Löschen von Cgsnapshot %s ist ein Fehler aufgetreten."
 msgid "Error occurred when updating consistency group %s."
 msgstr "Beim Aktualisieren von Konsistenzgruppe %s ist ein Fehler aufgetreten."
 
-msgid "Error promoting secondary volume to primary"
-msgstr ""
-"Fehler beim Hochstufen des sekundären Datenträgers zum primären Datenträger."
-
 #, python-format
 msgid "Error renaming volume %(vol)s: %(err)s."
 msgstr "Fehler beim Umbenennen von Datenträger %(vol)s: %(err)s."
@@ -3635,11 +3628,6 @@ msgstr "Fehler beim Abrufen der Informationen zum Replikat."
 msgid "Failed to get show fcns database info."
 msgstr "Fehler beim Abrufen der Anzeige von FCNS-Datenbankinformationen."
 
-msgid "Failed to get size of existing volume: %(vol). Volume Manage failed."
-msgstr ""
-"Fehler beim Abrufen der Größe von Datenträger %(vol). Datenträgerverwaltung "
-"fehlgeschlagen."
-
 #, python-format
 msgid "Failed to get size of volume %s"
 msgstr "Fehler beim Abrufen der Größe von Datenträger %s"
@@ -4011,12 +3999,6 @@ msgstr ""
 
 msgid "Failed to update snapshot."
 msgstr "Aktualisierung der Schattenkopie fehlgeschlagen."
-
-#, python-format
-msgid "Failed updating model with driver provided model %(model)s"
-msgstr ""
-"Fehler beim Aktualisieren des Modells mit dem vom Treiber bereitgestellten "
-"Modell %(model)s."
 
 #, python-format
 msgid ""
@@ -4489,6 +4471,15 @@ msgstr "Oauth2-Fehler in Google-Cloudspeicher: %(reason)s"
 msgid "Got bad path information from DRBDmanage! (%s)"
 msgstr "Fehlerhafte Pfadangaben von DRBDmanage erhalten! (%s)"
 
+#, python-format
+msgid "Group type %(group_type_id)s could not be found."
+msgstr "Gruppentyp %(group_type_id)s konnte nicht gefunden werden."
+
+#, python-format
+msgid "Group type with name %(group_type_name)s could not be found."
+msgstr ""
+"Gruppentyp mit dem Namen %(group_type_name)s konnte nicht gefunden werden."
+
 msgid "HBSD error occurs."
 msgstr "HBSD-Fehler tritt auf."
 
@@ -4825,6 +4816,10 @@ msgstr "Ungültiger Plattentyp: %(disk_type)s."
 #, python-format
 msgid "Invalid disk type: %s."
 msgstr "Ungültiger Plattentyp: %s."
+
+#, python-format
+msgid "Invalid group type: %(reason)s"
+msgstr "Ungültiger Gruppentyp: %(reason)s"
 
 #, python-format
 msgid "Invalid host: %(reason)s"
@@ -5338,6 +5333,10 @@ msgstr ""
 #, python-format
 msgid "May specify only one of %s"
 msgstr "Nur eine Angabe von %s ist zulässig."
+
+#, python-format
+msgid "Message %(message_id)s could not be found."
+msgstr "Nachricht %(message_id)s konnte nicht gefunden werden."
 
 msgid "Metadata backup already exists for this volume"
 msgstr "Für diesen Datenträger ist bereits eine Metadatensicherung vorhanden."
@@ -6024,9 +6023,6 @@ msgstr "Erstellen Sie Pool %(pool_list)s bereits im Voraus!"
 msgid "Please create %(tier_levels)s tier in pool %(pool)s in advance!"
 msgstr "Erstellen Sie die %(tier_levels)s im Pool %(pool)s bereits im Voraus!"
 
-msgid "Please re-run cinder-manage as root."
-msgstr "Führen Sie 'cinder-manage' erneut als Root aus."
-
 msgid "Please specify a name for QoS specs."
 msgstr "Geben Sie einen Namen für die QoS-Spezifikationen an."
 
@@ -6089,6 +6085,10 @@ msgstr "Name des Pools wurde nicht festgelegt."
 #, python-format
 msgid "Primary copy status: %(status)s and synchronized: %(sync)s."
 msgstr "Status der primären Kopie: %(status)s und synchronisiert: %(sync)s."
+
+#, python-format
+msgid "Programming error in Cinder: %(reason)s"
+msgstr "Programmierfehler in Cinder: %(reason)s"
 
 msgid "Project ID"
 msgstr "Projekt-ID"
@@ -6384,30 +6384,8 @@ msgstr ""
 msgid "Replication Service not found on %(storageSystemName)s."
 msgstr "Replikationsdienst wurde in %(storageSystemName)s nicht gefunden."
 
-msgid "Replication is not enabled"
-msgstr "Replikation ist nicht aktiviert."
-
-msgid "Replication is not enabled for volume"
-msgstr "Replikation ist für Datenträger nicht aktiviert."
-
 msgid "Replication not allowed yet."
 msgstr "Replikation ist noch nicht zulässig."
-
-#, python-format
-msgid ""
-"Replication status for volume must be active or active-stopped, but current "
-"status is: %s"
-msgstr ""
-"Replikationsstatus für Datenträger muss 'active' oder 'active-stopped' sein, "
-"aber der aktuelle Status ist: %s."
-
-#, python-format
-msgid ""
-"Replication status for volume must be inactive, active-stopped, or error, "
-"but current status is: %s"
-msgstr ""
-"Replikationsstatus für Datenträger muss 'inactive', 'active-stopped' oder "
-"'error' sein, aber der aktuelle Status ist: %s"
 
 msgid "Request body and URI mismatch"
 msgstr "Abweichung zwischen Anforderungshauptteil und URI"
@@ -6961,11 +6939,6 @@ msgstr "Fehler bei Paarwechsel."
 msgid "Sync pair error."
 msgstr "Fehler bei Paarsynchronisierung."
 
-msgid "Synchronizing secondary volume to primary failed."
-msgstr ""
-"Synchronisieren des sekundären Datenträgers mit primärem Datenträger "
-"fehlgeschlagen."
-
 #, python-format
 msgid "System %(id)s found with bad password status - %(pass_status)s."
 msgstr ""
@@ -7231,6 +7204,10 @@ msgid "The snapshot cannot be created when the volume is in maintenance mode."
 msgstr ""
 "Die Schattenkopie kann nicht erstellt werden, wenn der Datenträger im "
 "Wartungsmodus ist."
+
+#, python-format
+msgid "The snapshot is unavailable: %(data)s"
+msgstr "Die Schattenkopie ist nicht verfügbar: %(data)s"
 
 msgid "The source volume for this WebDAV operation not found."
 msgstr ""
@@ -7985,9 +7962,6 @@ msgstr "Datenträger %(existing)s konnte nicht in %(newname)s umbenannt werden."
 #, python-format
 msgid "Unable to retrieve snapshot group with id of %s."
 msgstr "Schattenkopiegruppe mit der ID %s kann nicht abgerufen werden. "
-
-msgid "Unable to retrieve volume stats."
-msgstr "Fehler beim Abrufen von Datenträgerstatistikdaten."
 
 #, python-format
 msgid ""
@@ -8750,12 +8724,6 @@ msgid "Volume size must multiple of 1 GB."
 msgstr "Datenträgergröße muss Vielfaches von 1 GB sein."
 
 #, python-format
-msgid "Volume status for volume must be available, but current status is: %s"
-msgstr ""
-"Datenträgerstatus für Datenträger muss 'available' sein, aber der aktuelle "
-"Status ist: %s"
-
-#, python-format
 msgid "Volume status must be \"available\" or \"in-use\" for snapshot. (is %s)"
 msgstr ""
 "Der Datenträger muss für eine Schattenkopie den Status \"available\" oder "
@@ -9445,9 +9413,6 @@ msgstr "check_for_setup_error: Systemname kann nicht bestimmt werden."
 msgid "check_hypermetro_exist error."
 msgstr "check_hypermetro_exist-Fehler."
 
-msgid "cinder-all is deprecated in Newton and will be removed in Ocata."
-msgstr "cinder-all ist in Newton veraltet und wird in Ocata entfernt."
-
 #, python-format
 msgid "clone depth exceeds limit of %s"
 msgstr "Klontiefe überschreitet den Grenzwert von %s"
@@ -9943,9 +9908,6 @@ msgstr "open_access_enabled ist nicht ausgeschaltet."
 msgid "progress must be an integer percentage"
 msgstr "Fortschritt muss ein Ganzzahlprozentsatz sein."
 
-msgid "promote_replica not implemented."
-msgstr "promote_replica nicht implementiert. "
-
 msgid "provider must be defined"
 msgstr "Provider muss definiert sein."
 
@@ -10083,14 +10045,8 @@ msgstr "Status muss 'available' sein."
 msgid "stop_hypermetro error."
 msgstr "stop_hypermetro-Fehler."
 
-msgid "sudo failed, continuing as if nothing happened"
-msgstr "sudo fehlgeschlagen, Vorgang wird fortgesetzt"
-
 msgid "sync_hypermetro error."
 msgstr "sync_hypermetro-Fehler."
-
-msgid "sync_replica not implemented."
-msgstr "sync_replica nicht implementiert. "
 
 #, python-format
 msgid ""

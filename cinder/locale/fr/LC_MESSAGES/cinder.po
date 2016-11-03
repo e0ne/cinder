@@ -10,9 +10,9 @@
 # Andreas Jaeger <jaegerandi@gmail.com>, 2016. #zanata
 msgid ""
 msgstr ""
-"Project-Id-Version: cinder 9.0.0.0b4.dev139\n"
+"Project-Id-Version: cinder 9.0.0.0rc2.dev202\n"
 "Report-Msgid-Bugs-To: https://bugs.launchpad.net/openstack-i18n/\n"
-"POT-Creation-Date: 2016-09-14 04:25+0000\n"
+"POT-Creation-Date: 2016-10-07 03:25+0000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1620,10 +1620,6 @@ msgid "Could not load paste app '%(name)s' from %(path)s"
 msgstr "Echec du chargement de l'app de collage '%(name)s' depuis %(path)s"
 
 #, python-format
-msgid "Could not read %s. Re-running with sudo"
-msgstr "Impossible de lire %s. Nouvelle exécution avec sudo"
-
-#, python-format
 msgid ""
 "Could not read information for snapshot %(name)s. Code: %(code)s. Reason: "
 "%(reason)s"
@@ -2734,9 +2730,6 @@ msgid "Error occurred when updating consistency group %s."
 msgstr ""
 "Une erreur est survenue lors de la mise à jour du groupe de cohérence %s."
 
-msgid "Error promoting secondary volume to primary"
-msgstr "Erreur de promotion du volume secondaire en volume primaire"
-
 #, python-format
 msgid "Error renaming volume %(vol)s: %(err)s."
 msgstr ""
@@ -3641,11 +3634,6 @@ msgstr "Echec d'obtention des informations de la réplique."
 msgid "Failed to get show fcns database info."
 msgstr "Echec de l'obtention des infos de la commande show fcns database."
 
-msgid "Failed to get size of existing volume: %(vol). Volume Manage failed."
-msgstr ""
-"Echec de l'obtention de la taille du volume existant : %(vol). L'opération "
-"Gérer le volume a échoué."
-
 #, python-format
 msgid "Failed to get size of volume %s"
 msgstr "Echec de l'obtention de la taille du volume %s"
@@ -4012,11 +4000,6 @@ msgstr ""
 
 msgid "Failed to update snapshot."
 msgstr "Impossible de mettre à jour l'instantané."
-
-#, python-format
-msgid "Failed updating model with driver provided model %(model)s"
-msgstr ""
-"Echec de la mise à jour du modèle de volume fourni avec le modèle %(model)s"
 
 #, python-format
 msgid ""
@@ -6039,9 +6022,6 @@ msgstr "Créez d'avance le pool %(pool_list)s. "
 msgid "Please create %(tier_levels)s tier in pool %(pool)s in advance!"
 msgstr "Créez d'avance le niveau %(tier_levels)s dans le pool %(pool)s. "
 
-msgid "Please re-run cinder-manage as root."
-msgstr "Réexécutez cinder-manage avec des droits root."
-
 msgid "Please specify a name for QoS specs."
 msgstr "Veuillez indiquer un nom pour les spécifications QoS."
 
@@ -6381,30 +6361,8 @@ msgstr ""
 msgid "Replication Service not found on %(storageSystemName)s."
 msgstr "Service de réplication introuvable sur %(storageSystemName)s."
 
-msgid "Replication is not enabled"
-msgstr "Réplication non activée"
-
-msgid "Replication is not enabled for volume"
-msgstr "Réplication non activée pour le volume"
-
 msgid "Replication not allowed yet."
 msgstr "La réplication n'est pas autorisée pour le moment."
-
-#, python-format
-msgid ""
-"Replication status for volume must be active or active-stopped, but current "
-"status is: %s"
-msgstr ""
-"L'état de la réplication du volume doit être active ou active-stopped, mais "
-"l'état actuel est : %s"
-
-#, python-format
-msgid ""
-"Replication status for volume must be inactive, active-stopped, or error, "
-"but current status is: %s"
-msgstr ""
-"L'état de la réplication du volume doit être inactive, active-stopped ou "
-"error, mais l'état en cours est : %s"
 
 msgid "Request body and URI mismatch"
 msgstr "Corps et URI de demande discordants"
@@ -6945,10 +6903,6 @@ msgstr "Erreur lors du basculement d'une paire."
 
 msgid "Sync pair error."
 msgstr "Erreur lors de la synchronisation de paire."
-
-msgid "Synchronizing secondary volume to primary failed."
-msgstr ""
-"La synchronisation du volume secondaire avec le volume principal a échoué."
 
 #, python-format
 msgid "System %(id)s found with bad password status - %(pass_status)s."
@@ -8701,12 +8655,6 @@ msgid "Volume size must multiple of 1 GB."
 msgstr "La taille du volume doit être un multiple de 1 Go."
 
 #, python-format
-msgid "Volume status for volume must be available, but current status is: %s"
-msgstr ""
-"Le volume doit être dans un état de disponibilité, mais l'état en cours est :"
-"%s"
-
-#, python-format
 msgid "Volume status must be \"available\" or \"in-use\" for snapshot. (is %s)"
 msgstr ""
 "L'état du volume doit être \"disponible\" ou \"en usage\" pour l'instantané. "
@@ -9871,9 +9819,6 @@ msgstr "open_access_enabled n'est pas désactivé."
 msgid "progress must be an integer percentage"
 msgstr "la progression doit être un pourcentage d'entier"
 
-msgid "promote_replica not implemented."
-msgstr "promote_replica non implémenté."
-
 msgid "provider must be defined"
 msgstr "fournisseur doit être défini"
 
@@ -10010,14 +9955,8 @@ msgstr "l'état doit être disponible"
 msgid "stop_hypermetro error."
 msgstr "Erreur stop_hypermetro."
 
-msgid "sudo failed, continuing as if nothing happened"
-msgstr "sudo a échoué, continue comme si de rien n'était"
-
 msgid "sync_hypermetro error."
 msgstr "Erreur sync_hypermetro."
-
-msgid "sync_replica not implemented."
-msgstr "sync_replica non implémenté."
 
 #, python-format
 msgid ""

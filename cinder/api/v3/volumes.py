@@ -154,18 +154,16 @@ class VolumeController(volumes_v2.VolumeController):
         req_volume_type = volume.get('volume_type', None)
         if req_volume_type:
             # Not found exception will be handled at the wsgi level
-            if not uuidutils.is_uuid_like(req_volume_type):
-                kwargs['volume_type'] = (
-                    volume_types.get_volume_type_by_name(
-                        context, req_volume_type))
-            else:
-                kwargs['volume_type'] = volume_types.get_volume_type(
-                    context, req_volume_type)
+            kwargs['volume_type'] = (
+                volume_types.get_by_name_or_id(context, req_volume_type))
 
         kwargs['metadata'] = volume.get('metadata', None)
 
         snapshot_id = volume.get('snapshot_id')
         if snapshot_id is not None:
+            if not uuidutils.is_uuid_like(snapshot_id):
+                msg = _("Snapshot ID must be in UUID form.")
+                raise exc.HTTPBadRequest(explanation=msg)
             # Not found exception will be handled at the wsgi level
             kwargs['snapshot'] = self.volume_api.get_snapshot(context,
                                                               snapshot_id)

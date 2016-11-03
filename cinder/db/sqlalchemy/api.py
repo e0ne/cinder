@@ -1721,12 +1721,11 @@ def volume_attachment_get_all_by_volume_id(context, volume_id, session=None):
 
 
 @require_context
-def volume_attachment_get_all_by_host(context, volume_id, host):
+def volume_attachment_get_all_by_host(context, host):
     session = get_session()
     with session.begin():
         result = model_query(context, models.VolumeAttachment,
                              session=session).\
-            filter_by(volume_id=volume_id).\
             filter_by(attached_host=host).\
             filter(models.VolumeAttachment.attach_status != 'detached').\
             all()
@@ -1735,13 +1734,11 @@ def volume_attachment_get_all_by_host(context, volume_id, host):
 
 @require_context
 def volume_attachment_get_all_by_instance_uuid(context,
-                                               volume_id,
                                                instance_uuid):
     session = get_session()
     with session.begin():
         result = model_query(context, models.VolumeAttachment,
                              session=session).\
-            filter_by(volume_id=volume_id).\
             filter_by(instance_uuid=instance_uuid).\
             filter(models.VolumeAttachment.attach_status != 'detached').\
             all()
@@ -2991,8 +2988,8 @@ def _volume_type_get_query(context, session=None, read_deleted='no',
                         read_deleted=read_deleted).\
         options(joinedload('extra_specs'))
 
-    if 'projects' in expected_fields:
-        query = query.options(joinedload('projects'))
+    for expected in expected_fields:
+        query = query.options(joinedload(expected))
 
     if not context.is_admin:
         the_filter = [models.VolumeTypes.is_public == true()]
@@ -3353,6 +3350,9 @@ def _volume_type_get(context, id, session=None, inactive=False,
 
     if 'projects' in expected_fields:
         vtype['projects'] = [p['project_id'] for p in result['projects']]
+
+    if 'qos_specs' in expected_fields:
+        vtype['qos_specs'] = result.qos_specs
 
     return vtype
 
@@ -4691,6 +4691,21 @@ def backup_get_all_by_volume(context, volume_id, filters=None):
     filters['volume_id'] = volume_id
 
     return _backup_get_all(context, filters)
+
+
+@require_context
+def backup_get_active_by_window(context, begin, end=None, project_id=None):
+    """Return backups that were active during window."""
+
+    query = model_query(context, models.Backup, read_deleted="yes")
+    query = query.filter(or_(models.Backup.deleted_at == None,  # noqa
+                             models.Backup.deleted_at > begin))
+    if end:
+        query = query.filter(models.Backup.created_at < end)
+    if project_id:
+        query = query.filter_by(project_id=project_id)
+
+    return query.all()
 
 
 @handle_db_data_error

@@ -226,6 +226,7 @@ class VMwareVcVmdkDriver(driver.VolumeDriver):
 
     # Minimum supported vCenter version.
     MIN_SUPPORTED_VC_VERSION = dist_version.LooseVersion('5.1')
+    NEXT_MIN_SUPPORTED_VC_VERSION = dist_version.LooseVersion('5.5')
 
     # PBM is enabled only for vCenter versions 5.5 and above
     PBM_ENABLED_VC_VERSION = dist_version.LooseVersion('5.5')
@@ -452,9 +453,7 @@ class VMwareVcVmdkDriver(driver.VolumeDriver):
         if clusters:
             for cluster in clusters:
                 cluster_hosts = self.volumeops.get_cluster_hosts(cluster)
-                for host in cluster_hosts:
-                    if self.volumeops.is_host_usable(host):
-                        hosts.append(host)
+                hosts.extend(cluster_hosts)
         return hosts
 
     def _select_datastore(self, req, host=None):
@@ -1853,28 +1852,30 @@ class VMwareVcVmdkDriver(driver.VolumeDriver):
                     '%s is not allowed.') % self.MIN_SUPPORTED_VC_VERSION
             LOG.error(msg)
             raise exceptions.VMwareDriverException(message=msg)
-        elif vc_version == self.MIN_SUPPORTED_VC_VERSION:
-            # TODO(vbala): enforce vCenter version 5.5 in Ocata release.
+        elif vc_version < self.NEXT_MIN_SUPPORTED_VC_VERSION:
+            # TODO(vbala): enforce vCenter version 5.5 in Pike release.
             LOG.warning(_LW('Running Cinder with a VMware vCenter version '
-                            '%s is deprecated. The minimum required version '
-                            'of vCenter server will be raised to 5.5 in the '
-                            '10.0.0 release.'), self.MIN_SUPPORTED_VC_VERSION)
+                            'less than %(ver)s is deprecated. The minimum '
+                            'required version of vCenter server will be raised'
+                            ' to %(ver)s in the 11.0.0 release.'),
+                        {'ver': self.NEXT_MIN_SUPPORTED_VC_VERSION})
 
     def do_setup(self, context):
         """Any initialization the volume driver does while starting."""
         self._validate_params()
 
         # Validate vCenter version.
-        vc_version = self._get_vc_version()
-        self._validate_vcenter_version(vc_version)
+        self._vc_version = self._get_vc_version()
+        self._validate_vcenter_version(self._vc_version)
 
         # Enable pbm only if vCenter version is 5.5+.
-        if vc_version and vc_version >= self.PBM_ENABLED_VC_VERSION:
+        if (self._vc_version and
+                self._vc_version >= self.PBM_ENABLED_VC_VERSION):
             self.pbm_wsdl = pbm.get_pbm_wsdl_location(
-                six.text_type(vc_version))
+                six.text_type(self._vc_version))
             if not self.pbm_wsdl:
                 LOG.error(_LE("Not able to configure PBM for vCenter server: "
-                              "%s"), vc_version)
+                              "%s"), self._vc_version)
                 raise exceptions.VMwareDriverException()
             self._storage_policy_enabled = True
             # Destroy current session so that it is recreated with pbm enabled
@@ -2014,7 +2015,15 @@ class VMwareVcVmdkDriver(driver.VolumeDriver):
                                              host=host, resource_pool=rp,
                                              extra_config=extra_config,
                                              folder=folder)
-        self.volumeops.update_backing_disk_uuid(clone, volume['id'])
+
+        # vCenter 6.0+ does not allow changing the UUID of delta disk created
+        # during linked cloning; skip setting UUID for vCenter 6.0+.
+        if (clone_type == volumeops.LINKED_CLONE_TYPE and
+                self._vc_version >= dist_version.LooseVersion('6.0')):
+            LOG.debug("Not setting vmdk UUID for volume: %s.", volume['id'])
+        else:
+            self.volumeops.update_backing_disk_uuid(clone, volume['id'])
+
         # If the volume size specified by the user is greater than
         # the size of the source volume, the newly created volume will
         # allocate the capacity to the size of the source volume in the backend

@@ -14,6 +14,7 @@
 
 from oslo_utils import versionutils
 from oslo_versionedobjects import fields
+import six
 
 from cinder import db
 from cinder import exception
@@ -23,16 +24,16 @@ from cinder.objects import base
 from cinder.volume import volume_types
 
 
-OPTIONAL_FIELDS = ['extra_specs', 'projects', 'qos_specs']
-
-
 @base.CinderObjectRegistry.register
 class VolumeType(base.CinderPersistentObject, base.CinderObject,
                  base.CinderObjectDictCompat, base.CinderComparableObject):
     # Version 1.0: Initial version
     # Version 1.1: Changed extra_specs to DictOfNullableStringsField
     # Version 1.2: Added qos_specs
-    VERSION = '1.2'
+    # Version 1.3: Add qos_specs_id
+    VERSION = '1.3'
+
+    OPTIONAL_FIELDS = ('extra_specs', 'projects', 'qos_specs')
 
     fields = {
         'id': fields.UUIDField(),
@@ -41,6 +42,7 @@ class VolumeType(base.CinderPersistentObject, base.CinderObject,
         'is_public': fields.BooleanField(default=True, nullable=True),
         'projects': fields.ListOfStringsField(nullable=True),
         'extra_specs': fields.DictOfNullableStringsField(nullable=True),
+        'qos_specs_id': fields.UUIDField(nullable=True),
         'qos_specs': fields.ObjectField('QualityOfServiceSpecs',
                                         nullable=True),
     }
@@ -57,17 +59,19 @@ class VolumeType(base.CinderPersistentObject, base.CinderObject,
                 for k, v in primitive['extra_specs'].items():
                     if v is None:
                         primitive['extra_specs'][k] = ''
+        if target_version < (1, 3):
+            primitive.pop('qos_specs_id', None)
 
     @classmethod
     def _get_expected_attrs(cls, context, *args, **kwargs):
         return 'extra_specs', 'projects'
 
-    @staticmethod
-    def _from_db_object(context, type, db_type, expected_attrs=None):
+    @classmethod
+    def _from_db_object(cls, context, type, db_type, expected_attrs=None):
         if expected_attrs is None:
             expected_attrs = ['extra_specs', 'projects']
         for name, field in type.fields.items():
-            if name in OPTIONAL_FIELDS:
+            if name in cls.OPTIONAL_FIELDS:
                 continue
             value = db_type[name]
             if isinstance(field, fields.IntegerField):
@@ -85,7 +89,13 @@ class VolumeType(base.CinderPersistentObject, base.CinderObject,
             elif specs and isinstance(specs, dict):
                 type.extra_specs = specs
         if 'projects' in expected_attrs:
-            type.projects = db_type.get('projects', [])
+            # NOTE(geguileo): Until projects stops being a polymorphic value we
+            # have to do a conversion here for VolumeTypeProjects ORM instance
+            # lists.
+            projects = db_type.get('projects', [])
+            if projects and not isinstance(projects[0], six.string_types):
+                projects = [p.project_id for p in projects]
+            type.projects = projects
         if 'qos_specs' in expected_attrs:
             qos_specs = objects.QualityOfServiceSpecs(context)
             qos_specs._from_db_object(context, qos_specs, db_type['qos_specs'])
@@ -116,6 +126,33 @@ class VolumeType(base.CinderPersistentObject, base.CinderObject,
             updated_values = volume_types.destroy(self._context, self.id)
         self.update(updated_values)
         self.obj_reset_changes(updated_values.keys())
+
+    def obj_load_attr(self, attrname):
+        if attrname not in self.OPTIONAL_FIELDS:
+            raise exception.ObjectActionError(
+                action='obj_load_attr',
+                reason=_('attribute %s not lazy-loadable') % attrname)
+        if not self._context:
+            raise exception.OrphanedObjectError(method='obj_load_attr',
+                                                objtype=self.obj_name())
+
+        if attrname == 'extra_specs':
+            self.extra_specs = db.volume_type_extra_specs_get(self._context,
+                                                              self.id)
+
+        elif attrname == 'qos_specs':
+            if self.qos_specs_id:
+                self.qos_specs = objects.QualityOfServiceSpecs.get_by_id(
+                    self._context, self.qos_specs_id)
+            else:
+                self.qos_specs = None
+
+        elif attrname == 'projects':
+            volume_type_projects = db.volume_type_access_get_all(self._context,
+                                                                 self.id)
+            self.projects = [x.project_id for x in volume_type_projects]
+
+        self.obj_reset_changes(fields=[attrname])
 
 
 @base.CinderObjectRegistry.register

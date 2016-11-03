@@ -26,7 +26,6 @@ from oslo_utils import excutils
 from oslo_utils import timeutils
 from oslo_utils import uuidutils
 
-from cinder.common import constants
 from cinder import db
 from cinder.db import base
 from cinder import exception
@@ -456,7 +455,6 @@ class API(base.Base):
         # to select the target host for this group.
         self.scheduler_rpcapi.create_group(
             context,
-            constants.VOLUME_TOPIC,
             group,
             group_spec=group_spec,
             request_spec_list=request_spec_list,
@@ -761,7 +759,8 @@ class API(base.Base):
                    'project_id': context.project_id,
                    'status': "creating",
                    'name': name,
-                   'description': description}
+                   'description': description,
+                   'group_type_id': group.group_type_id}
 
         group_snapshot = None
         group_snapshot_id = None

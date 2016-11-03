@@ -26,7 +26,6 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import strutils
 from oslo_utils import timeutils
-from oslo_utils import uuidutils
 import six
 
 from cinder.api import common
@@ -489,6 +488,13 @@ class API(base.Base):
     def get(self, context, volume_id, viewable_admin_meta=False):
         volume = objects.Volume.get_by_id(context, volume_id)
 
+        try:
+            check_policy(context, 'get', volume)
+        except exception.PolicyNotAuthorized:
+            # raise VolumeNotFound to avoid providing info about
+            # the existence of an unauthorized volume id
+            raise exception.VolumeNotFound(volume_id=volume_id)
+
         if viewable_admin_meta:
             ctxt = context.elevated()
             admin_metadata = self.db.volume_admin_metadata_get(ctxt,
@@ -496,12 +502,6 @@ class API(base.Base):
             volume.admin_metadata = admin_metadata
             volume.obj_reset_changes()
 
-        try:
-            check_policy(context, 'get', volume)
-        except exception.PolicyNotAuthorized:
-            # raise VolumeNotFound instead to make sure Cinder behaves
-            # as it used to
-            raise exception.VolumeNotFound(volume_id=volume_id)
         LOG.info(_LI("Volume info retrieved successfully."), resource=volume)
         return volume
 
@@ -1385,12 +1385,10 @@ class API(base.Base):
                         'volume_type': volume_type,
                         'volume_id': volume.id}
         self.scheduler_rpcapi.migrate_volume_to_host(context,
-                                                     constants.VOLUME_TOPIC,
-                                                     volume.id,
+                                                     volume,
                                                      host,
                                                      force_host_copy,
-                                                     request_spec,
-                                                     volume=volume)
+                                                     request_spec)
         LOG.info(_LI("Migrate volume request issued successfully."),
                  resource=volume)
 
@@ -1460,12 +1458,8 @@ class API(base.Base):
 
         # Support specifying volume type by ID or name
         try:
-            if uuidutils.is_uuid_like(new_type):
-                vol_type = volume_types.get_volume_type(context.elevated(),
-                                                        new_type)
-            else:
-                vol_type = volume_types.get_volume_type_by_name(
-                    context.elevated(), new_type)
+            vol_type = (
+                volume_types.get_by_name_or_id(context.elevated(), new_type))
         except exception.InvalidVolumeType:
             msg = _('Invalid volume_type passed: %s.') % new_type
             LOG.error(msg)
@@ -1534,10 +1528,9 @@ class API(base.Base):
                         'quota_reservations': reservations,
                         'old_reservations': old_reservations}
 
-        self.scheduler_rpcapi.retype(context, constants.VOLUME_TOPIC,
-                                     volume.id,
+        self.scheduler_rpcapi.retype(context, volume,
                                      request_spec=request_spec,
-                                     filter_properties={}, volume=volume)
+                                     filter_properties={})
         LOG.info(_LI("Retype volume request issued successfully."),
                  resource=volume)
 

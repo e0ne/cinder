@@ -61,9 +61,6 @@ class NetAppBlockStorage7modeLibraryTestCase(test.TestCase):
         # Deprecated option
         self.library.configuration.netapp_volume_list = None
 
-    def tearDown(self):
-        super(NetAppBlockStorage7modeLibraryTestCase, self).tearDown()
-
     def get_config_7mode(self):
         config = na_fakes.create_configuration_7mode()
         config.netapp_storage_protocol = 'iscsi'
@@ -140,6 +137,11 @@ class NetAppBlockStorage7modeLibraryTestCase(test.TestCase):
         self.zapi_client.get_ontapi_version.return_value = version
         self.assertRaises(exception.VolumeBackendAPIException,
                           self.library.check_for_setup_error)
+
+    def test__get_volume_model_update(self):
+        """Driver is not expected to return a model update."""
+        self.assertIsNone(
+            self.library._get_volume_model_update(fake.VOLUME_REF))
 
     @ddt.data(None, fake.VFILER)
     def test__get_owner(self, vfiler):

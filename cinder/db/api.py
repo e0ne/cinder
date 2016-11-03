@@ -344,14 +344,13 @@ def volume_attachment_get_all_by_volume_id(context, volume_id):
     return IMPL.volume_attachment_get_all_by_volume_id(context, volume_id)
 
 
-def volume_attachment_get_all_by_host(context, volume_id, host):
-    return IMPL.volume_attachment_get_all_by_host(context, volume_id, host)
+def volume_attachment_get_all_by_host(context, host):
+    return IMPL.volume_attachment_get_all_by_host(context, host)
 
 
 def volume_attachment_get_all_by_instance_uuid(context,
-                                               volume_id,
                                                instance_uuid):
-    return IMPL.volume_attachment_get_all_by_instance_uuid(context, volume_id,
+    return IMPL.volume_attachment_get_all_by_instance_uuid(context,
                                                            instance_uuid)
 
 
@@ -1153,6 +1152,14 @@ def backup_get_all_by_volume(context, volume_id, filters=None):
     """Get all backups belonging to a volume."""
     return IMPL.backup_get_all_by_volume(context, volume_id,
                                          filters=filters)
+
+
+def backup_get_active_by_window(context, begin, end=None, project_id=None):
+    """Get all the backups inside the window.
+
+    Specifying a project_id will filter for a certain project.
+    """
+    return IMPL.backup_get_active_by_window(context, begin, end, project_id)
 
 
 def backup_update(context, backup_id, values):

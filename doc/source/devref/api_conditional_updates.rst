@@ -34,7 +34,7 @@ And finally make the RPC call:
        self.volume_rpcapi.extend_volume(context, volume, new_size,
                                         reservations)
 
-The problem is that that this code would allow races, as other request could
+The problem is that this code would allow races, as other request could
 have already changed the volume status between us getting the value and
 updating the DB.
 
@@ -58,7 +58,7 @@ updating the DB.  In essence it is the SQL equivalent of an ``UPDATE ... FROM
 It is implemented as an abstraction layer on top of SQLAlchemy ORM engine in
 our DB api layer and exposed for consumption in Cinder's Persistent Versioned
 Objects through the ``conditional_update`` method so it can be used from any
-Vesioned Object instance that has persistence (Volume, Snapshot, Backup...).
+Versioned Object instance that has persistence (Volume, Snapshot, Backup...).
 
 Method signature is:
 
@@ -166,7 +166,7 @@ Basic Usage
   queries/conditions and as the rest of the DB methods must be properly
   abstracted from the API.
 
-  Therefore we will create the medhot in cinder/db/sqlalchemy/api.py:
+  Therefore we will create the method in cinder/db/sqlalchemy/api.py:
 
   .. code:: python
 

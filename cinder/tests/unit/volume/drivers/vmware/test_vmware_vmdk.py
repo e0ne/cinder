@@ -38,17 +38,6 @@ from cinder.volume.drivers.vmware import vmdk
 from cinder.volume.drivers.vmware import volumeops
 
 
-class FakeObject(object):
-    def __init__(self):
-        self._fields = {}
-
-    def __setitem__(self, key, value):
-        self._fields[key] = value
-
-    def __getitem__(self, item):
-        return self._fields[item]
-
-
 # TODO(vbala) Split test methods handling multiple cases into multiple methods,
 # each handling a specific case.
 @ddt.ddt
@@ -1844,6 +1833,7 @@ class VMwareVcVmdkDriverTestCase(test.TestCase):
         """Test _clone_backing with clone type - linked."""
         clone = mock.sentinel.clone
         volume_ops.clone_backing.return_value = clone
+        self._driver._vc_version = ver.LooseVersion('5.5')
 
         fake_size = 3
         fake_volume = {'volume_type_id': None, 'name': 'fake_name',
@@ -1884,6 +1874,24 @@ class VMwareVcVmdkDriverTestCase(test.TestCase):
                                     volumeops.LINKED_CLONE_TYPE,
                                     fake_snapshot['volume_size'])
         self.assertFalse(extend_backing.called)
+
+    @mock.patch.object(VMDK_DRIVER, 'volumeops')
+    def test_clone_backing_linked_vc60(self, vops):
+        self._driver._vc_version = ver.LooseVersion('6.0')
+
+        volume = self._create_volume_dict()
+        snapshot_ref = mock.sentinel.snapshot_moref
+        backing = mock.sentinel.backing
+        self._driver._clone_backing(
+            volume, backing, snapshot_ref, volumeops.LINKED_CLONE_TYPE,
+            volume['size'])
+
+        extra_config = {vmdk.EXTRA_CONFIG_VOLUME_ID_KEY: volume['id']}
+        vops.clone_backing.assert_called_once_with(
+            volume['name'], backing, snapshot_ref, volumeops.LINKED_CLONE_TYPE,
+            None, host=None, resource_pool=None, extra_config=extra_config,
+            folder=None)
+        vops.update_backing_disk_uuid.assert_not_called()
 
     @mock.patch.object(VMDK_DRIVER, '_extend_backing')
     @mock.patch.object(VMDK_DRIVER, '_select_ds_for_volume')
@@ -2336,17 +2344,13 @@ class VMwareVcVmdkDriverTestCase(test.TestCase):
         host_2 = mock.sentinel.host_2
         host_3 = mock.sentinel.host_3
         vops.get_cluster_hosts.side_effect = [[host_1, host_2], [host_3]]
-        # host_1 and host_3 are usable, host_2 is not usable
-        vops.is_host_usable.side_effect = [True, False, True]
 
         cls_1 = mock.sentinel.cls_1
         cls_2 = mock.sentinel.cls_2
-        self.assertEqual([host_1, host_3],
+        self.assertEqual([host_1, host_2, host_3],
                          self._driver._get_hosts([cls_1, cls_2]))
         exp_calls = [mock.call(cls_1), mock.call(cls_2)]
         self.assertEqual(exp_calls, vops.get_cluster_hosts.call_args_list)
-        exp_calls = [mock.call(host_1), mock.call(host_2), mock.call(host_3)]
-        self.assertEqual(exp_calls, vops.is_host_usable.call_args_list)
 
     @mock.patch.object(VMDK_DRIVER, '_get_hosts')
     @mock.patch.object(VMDK_DRIVER, 'ds_sel')

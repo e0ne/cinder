@@ -38,10 +38,6 @@ from cinder.volume import throttling
 LOG = logging.getLogger(__name__)
 
 
-deprecated_use_chap_auth_opts = [cfg.DeprecatedOpt('eqlx_use_chap')]
-deprecated_chap_username_opts = [cfg.DeprecatedOpt('eqlx_chap_login')]
-deprecated_chap_password_opts = [cfg.DeprecatedOpt('eqlx_chap_password')]
-
 volume_opts = [
     cfg.IntOpt('num_shell_tries',
                default=3,
@@ -179,16 +175,13 @@ volume_opts = [
     cfg.BoolOpt('use_chap_auth',
                 default=False,
                 help='Option to enable/disable CHAP authentication for '
-                     'targets.',
-                deprecated_opts=deprecated_use_chap_auth_opts),
+                     'targets.'),
     cfg.StrOpt('chap_username',
                default='',
-               help='CHAP user name.',
-               deprecated_opts=deprecated_chap_username_opts),
+               help='CHAP user name.'),
     cfg.StrOpt('chap_password',
                default='',
                help='Password for specified CHAP account name.',
-               deprecated_opts=deprecated_chap_password_opts,
                secret=True),
     cfg.StrOpt('driver_data_namespace',
                help='Namespace for driver private data values to be '
@@ -1914,59 +1907,27 @@ class BaseVD(object):
         """
         raise NotImplementedError()
 
+    def extend_volume(self, volume, new_size):
+        msg = _("Extend volume not implemented")
+        raise NotImplementedError(msg)
 
-@six.add_metaclass(abc.ABCMeta)
+    def accept_transfer(self, context, volume, new_user, new_project):
+        pass
+
+
 class LocalVD(object):
-    @abc.abstractmethod
-    def local_path(self, volume):
-        return
+    """This class has been deprecated and should not be inherited."""
+    pass
 
 
-@six.add_metaclass(abc.ABCMeta)
 class SnapshotVD(object):
-    @abc.abstractmethod
-    def create_snapshot(self, snapshot):
-        """Creates a snapshot."""
-        return
-
-    @abc.abstractmethod
-    def delete_snapshot(self, snapshot):
-        """Deletes a snapshot."""
-        return
-
-    @abc.abstractmethod
-    def create_volume_from_snapshot(self, volume, snapshot):
-        """Creates a volume from a snapshot.
-
-        If volume_type extra specs includes 'replication: <is> True'
-        the driver needs to create a volume replica (secondary),
-        and setup replication between the newly created volume and
-        the secondary volume.
-        """
-        return
+    """This class has been deprecated and should not be inherited."""
+    pass
 
 
-@six.add_metaclass(abc.ABCMeta)
 class ConsistencyGroupVD(object):
-    @abc.abstractmethod
-    def create_cgsnapshot(self, context, cgsnapshot, snapshots):
-        """Creates a cgsnapshot."""
-        return
-
-    @abc.abstractmethod
-    def delete_cgsnapshot(self, context, cgsnapshot, snapshots):
-        """Deletes a cgsnapshot."""
-        return
-
-    @abc.abstractmethod
-    def create_consistencygroup(self, context, group):
-        """Creates a consistencygroup."""
-        return
-
-    @abc.abstractmethod
-    def delete_consistencygroup(self, context, group, volumes):
-        """Deletes a consistency group."""
-        return
+    """This class has been deprecated and should not be inherited."""
+    pass
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -2017,18 +1978,14 @@ class MigrateVD(object):
         return (False, None)
 
 
-@six.add_metaclass(abc.ABCMeta)
 class ExtendVD(object):
-    @abc.abstractmethod
-    def extend_volume(self, volume, new_size):
-        return
+    """This class has been deprecated and should not be inherited."""
+    pass
 
 
-@six.add_metaclass(abc.ABCMeta)
 class TransferVD(object):
-    def accept_transfer(self, context, volume, new_user, new_project):
-        """Accept the transfer of a volume for a new user/project."""
-        pass
+    """This class has been deprecated and should not be inherited."""
+    pass
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -2223,107 +2180,9 @@ class ManageableSnapshotsVD(object):
         pass
 
 
-# TODO(jdg): Remove this after the V2.1 code merges
-@six.add_metaclass(abc.ABCMeta)
-class ReplicaVD(object):
-    @abc.abstractmethod
-    def reenable_replication(self, context, volume):
-        """Re-enable replication between the replica and primary volume.
-
-        This is used to re-enable/fix the replication between primary
-        and secondary. One use is as part of the fail-back process, when
-        you re-synchorize your old primary with the promoted volume
-        (the old replica).
-        Returns model_update for the volume to reflect the actions of the
-        driver.
-
-        The driver is expected to update the following entries:
-        - 'replication_status'
-        - 'replication_extended_status'
-        - 'replication_driver_data'
-
-        Possible 'replication_status' values (in model_update) are:
-        - 'error' - replication in error state
-        - 'copying' - replication copying data to secondary (inconsistent)
-        - 'active' - replication copying data to secondary (consistent)
-        - 'active-stopped' - replication data copy on hold (consistent)
-        - 'inactive' - replication data copy on hold (inconsistent)
-
-        Values in 'replication_extended_status' and 'replication_driver_data'
-        are managed by the driver.
-
-        :param context: Context
-        :param volume: A dictionary describing the volume
-        """
-        return
-
-    def get_replication_status(self, context, volume):
-        """Query the actual volume replication status from the driver.
-
-        Returns model_update for the volume.
-        The driver is expected to update the following entries:
-        - 'replication_status'
-        - 'replication_extended_status'
-        - 'replication_driver_data'
-
-        Possible 'replication_status' values (in model_update) are:
-        - 'error' - replication in error state
-        - 'copying' - replication copying data to secondary (inconsistent)
-        - 'active' - replication copying data to secondary (consistent)
-        - 'active-stopped' - replication data copy on hold (consistent)
-        - 'inactive' - replication data copy on hold (inconsistent)
-
-        Values in 'replication_extended_status' and 'replication_driver_data'
-        are managed by the driver.
-
-        :param context: Context
-        :param volume: A dictionary describing the volume
-        """
-        return None
-
-    @abc.abstractmethod
-    def promote_replica(self, context, volume):
-        """Promote the replica to be the primary volume.
-
-        Following this command, replication between the volumes at
-        the storage level should be stopped, the replica should be
-        available to be attached, and the replication status should
-        be in status 'inactive'.
-
-        Returns model_update for the volume.
-        The driver is expected to update the following entries:
-        - 'replication_status'
-        - 'replication_extended_status'
-        - 'replication_driver_data'
-
-        Possible 'replication_status' values (in model_update) are:
-        - 'error' - replication in error state
-        - 'inactive' - replication data copy on hold (inconsistent)
-
-        Values in 'replication_extended_status' and 'replication_driver_data'
-        are managed by the driver.
-
-        :param context: Context
-        :param volume: A dictionary describing the volume
-        """
-        return
-
-    @abc.abstractmethod
-    def create_replica_test_volume(self, volume, src_vref):
-        """Creates a test replica clone of the specified replicated volume.
-
-        Create a clone of the replicated (secondary) volume.
-        """
-        return
-
-
 class VolumeDriver(ConsistencyGroupVD, TransferVD, ManageableVD,
                    ExtendVD, CloneableImageVD, ManageableSnapshotsVD,
-                   SnapshotVD, ReplicaVD, LocalVD, MigrateVD, BaseVD):
-    """This class will be deprecated soon.
-
-    Please use the abstract classes above for new drivers.
-    """
+                   SnapshotVD, LocalVD, MigrateVD, BaseVD):
     def check_for_setup_error(self):
         raise NotImplementedError()
 
@@ -2331,6 +2190,14 @@ class VolumeDriver(ConsistencyGroupVD, TransferVD, ManageableVD,
         raise NotImplementedError()
 
     def create_volume_from_snapshot(self, volume, snapshot):
+        """Creates a volume from a snapshot.
+
+        If volume_type extra specs includes 'replication: <is> True'
+        the driver needs to create a volume replica (secondary),
+        and setup replication between the newly created volume and
+        the secondary volume.
+        """
+
         raise NotImplementedError()
 
     def create_replica_test_volume(self, volume, src_vref):
@@ -2340,9 +2207,11 @@ class VolumeDriver(ConsistencyGroupVD, TransferVD, ManageableVD,
         raise NotImplementedError()
 
     def create_snapshot(self, snapshot):
+        """Creates a snapshot."""
         raise NotImplementedError()
 
     def delete_snapshot(self, snapshot):
+        """Deletes a snapshot."""
         raise NotImplementedError()
 
     def local_path(self, volume):
@@ -2389,14 +2258,6 @@ class VolumeDriver(ConsistencyGroupVD, TransferVD, ManageableVD,
 
     def retype(self, context, volume, new_type, diff, host):
         return False, None
-
-    def reenable_replication(self, context, volume):
-        msg = _("sync_replica not implemented.")
-        raise NotImplementedError(msg)
-
-    def promote_replica(self, context, volume):
-        msg = _("promote_replica not implemented.")
-        raise NotImplementedError(msg)
 
     # #######  Interface methods for DataPath (Connector) ########
     def ensure_export(self, context, volume):
@@ -2652,6 +2513,9 @@ class VolumeDriver(ConsistencyGroupVD, TransferVD, ManageableVD,
 
     def migrate_volume(self, context, volume, host):
         return (False, None)
+
+    def accept_transfer(self, context, volume, new_user, new_project):
+        pass
 
 
 class ProxyVD(object):

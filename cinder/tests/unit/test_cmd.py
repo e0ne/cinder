@@ -26,7 +26,6 @@ except ImportError:
     import rtslib as rtslib_fb
 
 
-from cinder.cmd import all as cinder_all
 from cinder.cmd import api as cinder_api
 from cinder.cmd import backup as cinder_backup
 from cinder.cmd import manage as cinder_manage
@@ -110,183 +109,6 @@ class TestCinderBackupCmd(test.TestCase):
         service_create.assert_called_once_with(binary='cinder-backup')
         service_serve.assert_called_once_with(server)
         service_wait.assert_called_once_with()
-
-
-class TestCinderAllCmd(test.TestCase):
-
-    def setUp(self):
-        super(TestCinderAllCmd, self).setUp()
-        sys.argv = ['cinder-all']
-
-    def tearDown(self):
-        super(TestCinderAllCmd, self).tearDown()
-
-    @mock.patch('oslo_log.versionutils.report_deprecated_feature')
-    @mock.patch('cinder.rpc.init')
-    @mock.patch('cinder.service.Service.create')
-    @mock.patch('cinder.service.WSGIService')
-    @mock.patch('cinder.service.process_launcher')
-    @mock.patch('cinder.utils.monkey_patch')
-    @mock.patch('oslo_log.log.getLogger')
-    @mock.patch('oslo_log.log.setup')
-    def test_main(self, log_setup, get_logger, monkey_patch, process_launcher,
-                  wsgi_service, service_create, rpc_init, mock_log_utils):
-        CONF.set_override('enabled_backends', None)
-        launcher = process_launcher.return_value
-        server = wsgi_service.return_value
-        server.workers = mock.sentinel.worker_count
-        service = service_create.return_value
-
-        cinder_all.main()
-
-        self.assertTrue(mock_log_utils.called)
-        self.assertEqual('cinder', CONF.project)
-        self.assertEqual(CONF.version, version.version_string())
-        log_setup.assert_called_once_with(CONF, "cinder")
-        get_logger.assert_called_once_with('cinder.all')
-        monkey_patch.assert_called_once_with()
-        rpc_init.assert_called_once_with(CONF)
-        process_launcher.assert_called_once_with()
-        wsgi_service.assert_called_once_with('osapi_volume')
-        launcher.launch_service.assert_any_call(server, workers=server.workers)
-
-        service_create.assert_has_calls([
-            mock.call(binary='cinder-scheduler'),
-            mock.call(binary='cinder-backup'),
-            mock.call(binary='cinder-volume', coordination=True)],
-            any_order=True)
-        self.assertEqual(3, service_create.call_count)
-        launcher.launch_service.assert_has_calls([mock.call(service)] * 3)
-        self.assertEqual(4, launcher.launch_service.call_count)
-
-        launcher.wait.assert_called_once_with()
-
-    @mock.patch('cinder.rpc.init')
-    @mock.patch('cinder.service.Service.create')
-    @mock.patch('cinder.service.WSGIService')
-    @mock.patch('cinder.service.process_launcher')
-    @mock.patch('cinder.utils.monkey_patch')
-    @mock.patch('oslo_log.log.getLogger')
-    @mock.patch('oslo_log.log.setup')
-    def test_main_with_backend(self, log_setup, get_logger, monkey_patch,
-                               process_launcher, wsgi_service, service_create,
-                               rpc_init):
-        CONF.set_override('enabled_backends', ['', 'backend1', ''])
-        CONF.set_override('host', 'host')
-        launcher = process_launcher.return_value
-        server = wsgi_service.return_value
-        server.workers = mock.sentinel.worker_count
-        service = service_create.return_value
-
-        cinder_all.main()
-
-        self.assertEqual('cinder', CONF.project)
-        self.assertEqual(CONF.version, version.version_string())
-        log_setup.assert_called_once_with(CONF, "cinder")
-        get_logger.assert_called_once_with('cinder.all')
-        monkey_patch.assert_called_once_with()
-        rpc_init.assert_called_once_with(CONF)
-        process_launcher.assert_called_once_with()
-        wsgi_service.assert_called_once_with('osapi_volume')
-        launcher.launch_service.assert_any_call(server, workers=server.workers)
-
-        service_create.assert_has_calls([mock.call(binary='cinder-scheduler'),
-                                         mock.call(binary='cinder-backup'),
-                                         mock.call(binary='cinder-volume',
-                                                   host='host@backend1',
-                                                   service_name='backend1',
-                                                   coordination=True)],
-                                        any_order=True)
-        self.assertEqual(3, service_create.call_count)
-        launcher.launch_service.assert_has_calls([mock.call(service)] * 3)
-        self.assertEqual(4, launcher.launch_service.call_count)
-
-        launcher.wait.assert_called_once_with()
-
-    @mock.patch('cinder.rpc.init')
-    @mock.patch('cinder.service.Service.create')
-    @mock.patch('cinder.service.WSGIService')
-    @mock.patch('cinder.service.process_launcher')
-    @mock.patch('cinder.utils.monkey_patch')
-    @mock.patch('oslo_log.log.getLogger')
-    @mock.patch('oslo_log.log.setup')
-    def test_main_load_osapi_volume_exception(self, log_setup, get_logger,
-                                              monkey_patch, process_launcher,
-                                              wsgi_service, service_create,
-                                              rpc_init):
-        launcher = process_launcher.return_value
-        server = wsgi_service.return_value
-        server.workers = mock.sentinel.worker_count
-        mock_log = get_logger.return_value
-
-        for ex in (Exception(), SystemExit()):
-            launcher.launch_service.side_effect = ex
-
-            cinder_all.main()
-
-            self.assertEqual('cinder', CONF.project)
-            self.assertEqual(CONF.version, version.version_string())
-            log_setup.assert_called_once_with(CONF, "cinder")
-            get_logger.assert_called_once_with('cinder.all')
-            monkey_patch.assert_called_once_with()
-            process_launcher.assert_called_once_with()
-            wsgi_service.assert_called_once_with('osapi_volume')
-            rpc_init.assert_called_with(CONF)
-            launcher.launch_service.assert_any_call(server,
-                                                    workers=server.workers)
-            self.assertTrue(mock_log.exception.called)
-
-            # Reset for the next exception
-            log_setup.reset_mock()
-            get_logger.reset_mock()
-            monkey_patch.reset_mock()
-            process_launcher.reset_mock()
-            wsgi_service.reset_mock()
-            mock_log.reset_mock()
-
-    @mock.patch('cinder.rpc.init')
-    @mock.patch('cinder.service.Service.create')
-    @mock.patch('cinder.service.WSGIService')
-    @mock.patch('cinder.service.process_launcher')
-    @mock.patch('cinder.utils.monkey_patch')
-    @mock.patch('oslo_log.log.getLogger')
-    @mock.patch('oslo_log.log.setup')
-    def test_main_load_binary_exception(self, log_setup, get_logger,
-                                        monkey_patch, process_launcher,
-                                        wsgi_service, service_create,
-                                        rpc_init):
-        CONF.set_override('enabled_backends', None)
-        launcher = process_launcher.return_value
-        server = wsgi_service.return_value
-        server.workers = mock.sentinel.worker_count
-        service = service_create.return_value
-        mock_log = get_logger.return_value
-
-        def launch_service(*args, **kwargs):
-            if service in args:
-                raise Exception()
-
-        launcher.launch_service.side_effect = launch_service
-
-        cinder_all.main()
-
-        self.assertEqual('cinder', CONF.project)
-        self.assertEqual(CONF.version, version.version_string())
-        log_setup.assert_called_once_with(CONF, "cinder")
-        get_logger.assert_called_once_with('cinder.all')
-        monkey_patch.assert_called_once_with()
-        process_launcher.assert_called_once_with()
-        wsgi_service.assert_called_once_with('osapi_volume')
-        launcher.launch_service.assert_any_call(server,
-                                                workers=server.workers)
-        services = (('cinder-volume', {'coordination': True}),
-                    ('cinder-backup', {}),
-                    ('cinder-scheduler', {}))
-        for binary, params in services:
-            service_create.assert_any_call(binary=binary, **params)
-            launcher.launch_service.assert_called_with(service)
-        rpc_init.assert_called_once_with(CONF)
-        self.assertTrue(mock_log.exception.called)
 
 
 class TestCinderSchedulerCmd(test.TestCase):
@@ -385,9 +207,6 @@ class TestCinderManageCmd(test.TestCase):
     def setUp(self):
         super(TestCinderManageCmd, self).setUp()
         sys.argv = ['cinder-manage']
-
-    def tearDown(self):
-        super(TestCinderManageCmd, self).tearDown()
 
     def _test_purge_invalid_age_in_days(self, age_in_days):
         db_cmds = cinder_manage.DbCommands()
@@ -742,6 +561,31 @@ class TestCinderManageCmd(test.TestCase):
         backup_get_by_host.assert_called_once_with(ctxt, 'fake_host')
         backup_update.assert_called_once_with(ctxt, fake.BACKUP_ID,
                                               {'host': 'fake_host2'})
+
+    @mock.patch('cinder.db.consistencygroup_update')
+    @mock.patch('cinder.db.consistencygroup_get_all')
+    @mock.patch('cinder.context.get_admin_context')
+    def test_update_consisgroup_host(self, get_admin_context,
+                                     consisgroup_get_all,
+                                     consisgroup_update):
+        ctxt = context.RequestContext(fake.USER_ID, fake.PROJECT_ID)
+        get_admin_context.return_value = ctxt
+        consisgroup = {'id': fake.CONSISTENCY_GROUP_ID,
+                       'user_id': fake.USER_ID,
+                       'project_id': fake.PROJECT_ID,
+                       'host': 'fake-host',
+                       'status': fields.ConsistencyGroupStatus.AVAILABLE
+                       }
+        consisgroup_get_all.return_value = [consisgroup]
+        consisgrup_cmds = cinder_manage.ConsistencyGroupCommands()
+        consisgrup_cmds.update_cg_host('fake_host', 'fake_host2')
+
+        get_admin_context.assert_called_once_with()
+        consisgroup_get_all.assert_called_once_with(
+            ctxt, filters={'host': 'fake_host'}, limit=None, marker=None,
+            offset=None, sort_dirs=None, sort_keys=None)
+        consisgroup_update.assert_called_once_with(
+            ctxt, fake.CONSISTENCY_GROUP_ID, {'host': 'fake_host2'})
 
     @mock.patch('cinder.utils.service_is_up')
     @mock.patch('cinder.db.service_get_all')
@@ -1910,6 +1754,72 @@ class TestCinderVolumeUsageAuditCmd(test.TestCase):
                       extra_usage_info=local_extra_info_delete)
         ])
 
+    @mock.patch('cinder.volume.utils.notify_about_backup_usage')
+    @mock.patch('cinder.db.backup_get_active_by_window')
+    @mock.patch('cinder.volume.utils.notify_about_volume_usage')
+    @mock.patch('cinder.db.volume_get_active_by_window')
+    @mock.patch('cinder.utils.last_completed_audit_period')
+    @mock.patch('cinder.rpc.init')
+    @mock.patch('cinder.version.version_string')
+    @mock.patch('cinder.context.get_admin_context')
+    def test_main_send_backup_error(self, get_admin_context,
+                                    version_string, rpc_init,
+                                    last_completed_audit_period,
+                                    volume_get_active_by_window,
+                                    notify_about_volume_usage,
+                                    backup_get_active_by_window,
+                                    notify_about_backup_usage):
+        CONF.set_override('send_actions', True)
+        CONF.set_override('start_time', '2014-01-01 01:00:00')
+        CONF.set_override('end_time', '2014-02-02 02:00:00')
+        begin = datetime.datetime(2014, 1, 1, 1, 0)
+        end = datetime.datetime(2014, 2, 2, 2, 0)
+        ctxt = context.RequestContext('fake-user', 'fake-project')
+        get_admin_context.return_value = ctxt
+        last_completed_audit_period.return_value = (begin, end)
+        backup1_created = datetime.datetime(2014, 1, 1, 2, 0)
+        backup1_deleted = datetime.datetime(2014, 1, 1, 3, 0)
+        backup1 = mock.MagicMock(id=fake.BACKUP_ID,
+                                 project_id=fake.PROJECT_ID,
+                                 created_at=backup1_created,
+                                 deleted_at=backup1_deleted)
+        volume_get_active_by_window.return_value = []
+        backup_get_active_by_window.return_value = [backup1]
+        extra_info = {
+            'audit_period_beginning': str(begin),
+            'audit_period_ending': str(end),
+        }
+        local_extra_info_create = {
+            'audit_period_beginning': str(backup1.created_at),
+            'audit_period_ending': str(backup1.created_at),
+        }
+        local_extra_info_delete = {
+            'audit_period_beginning': str(backup1.deleted_at),
+            'audit_period_ending': str(backup1.deleted_at),
+        }
+
+        notify_about_backup_usage.side_effect = Exception()
+
+        volume_usage_audit.main()
+
+        get_admin_context.assert_called_once_with()
+        self.assertEqual('cinder', CONF.project)
+        self.assertEqual(CONF.version, version.version_string())
+        rpc_init.assert_called_once_with(CONF)
+        last_completed_audit_period.assert_called_once_with()
+        volume_get_active_by_window.assert_called_once_with(ctxt, begin, end)
+        self.assertFalse(notify_about_volume_usage.called)
+        notify_about_backup_usage.assert_any_call(ctxt, backup1, 'exists',
+                                                  extra_info)
+        notify_about_backup_usage.assert_any_call(
+            ctxt, backup1, 'create.start',
+            extra_usage_info=local_extra_info_create)
+        notify_about_backup_usage.assert_any_call(
+            ctxt, backup1, 'delete.start',
+            extra_usage_info=local_extra_info_delete)
+
+    @mock.patch('cinder.volume.utils.notify_about_backup_usage')
+    @mock.patch('cinder.db.backup_get_active_by_window')
     @mock.patch('cinder.volume.utils.notify_about_snapshot_usage')
     @mock.patch('cinder.objects.snapshot.SnapshotList.get_active_by_window')
     @mock.patch('cinder.volume.utils.notify_about_volume_usage')
@@ -1923,7 +1833,8 @@ class TestCinderVolumeUsageAuditCmd(test.TestCase):
     def test_main(self, get_admin_context, log_setup, get_logger,
                   version_string, rpc_init, last_completed_audit_period,
                   volume_get_active_by_window, notify_about_volume_usage,
-                  snapshot_get_active_by_window, notify_about_snapshot_usage):
+                  snapshot_get_active_by_window, notify_about_snapshot_usage,
+                  backup_get_active_by_window, notify_about_backup_usage):
         CONF.set_override('send_actions', True)
         CONF.set_override('start_time', '2014-01-01 01:00:00')
         CONF.set_override('end_time', '2014-02-02 02:00:00')
@@ -1968,6 +1879,22 @@ class TestCinderVolumeUsageAuditCmd(test.TestCase):
             'audit_period_ending': str(snapshot1.deleted_at),
         }
 
+        backup1_created = datetime.datetime(2014, 1, 1, 2, 0)
+        backup1_deleted = datetime.datetime(2014, 1, 1, 3, 0)
+        backup1 = mock.MagicMock(id=fake.BACKUP_ID,
+                                 project_id=fake.PROJECT_ID,
+                                 created_at=backup1_created,
+                                 deleted_at=backup1_deleted)
+        backup_get_active_by_window.return_value = [backup1]
+        extra_info_backup_create = {
+            'audit_period_beginning': str(backup1.created_at),
+            'audit_period_ending': str(backup1.created_at),
+        }
+        extra_info_backup_delete = {
+            'audit_period_beginning': str(backup1.deleted_at),
+            'audit_period_ending': str(backup1.deleted_at),
+        }
+
         volume_usage_audit.main()
 
         get_admin_context.assert_called_once_with()
@@ -2000,4 +1927,16 @@ class TestCinderVolumeUsageAuditCmd(test.TestCase):
                       extra_usage_info=extra_info_snapshot_delete),
             mock.call(ctxt, snapshot1, 'delete.end',
                       extra_usage_info=extra_info_snapshot_delete)
+        ])
+
+        notify_about_backup_usage.assert_has_calls([
+            mock.call(ctxt, backup1, 'exists', extra_info),
+            mock.call(ctxt, backup1, 'create.start',
+                      extra_usage_info=extra_info_backup_create),
+            mock.call(ctxt, backup1, 'create.end',
+                      extra_usage_info=extra_info_backup_create),
+            mock.call(ctxt, backup1, 'delete.start',
+                      extra_usage_info=extra_info_backup_delete),
+            mock.call(ctxt, backup1, 'delete.end',
+                      extra_usage_info=extra_info_backup_delete)
         ])

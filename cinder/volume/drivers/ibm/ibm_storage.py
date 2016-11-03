@@ -13,10 +13,6 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-#
-# Authors:
-#   Erik Zaadi <erikz@il.ibm.com>
-#   Avishay Traeger <avishay@il.ibm.com>
 
 """
 IBM Storage driver is a unified Volume driver for IBM XIV, Spectrum Accelerate,
@@ -28,6 +24,7 @@ from oslo_log import log as logging
 from oslo_utils import importutils
 
 from cinder import exception
+from cinder import interface
 from cinder.volume import driver
 from cinder.volume.drivers.san import san
 
@@ -59,6 +56,7 @@ CONF.register_opts(driver_opts)
 LOG = logging.getLogger(__name__)
 
 
+@interface.volumedriver
 class IBMStorageDriver(san.SanDriver,
                        driver.ManageableVD,
                        driver.ExtendVD,
@@ -73,6 +71,8 @@ class IBMStorageDriver(san.SanDriver,
     Accelerate, FlashSystem A9000, FlashSystem A9000R and DS8000 storage
     systems.
     """
+
+    VERSION = "1.8.0"
 
     # ThirdPartySystems wiki page
     CI_WIKI_NAME = "IBM_XIV-DS8K_CI"
