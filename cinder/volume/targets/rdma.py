@@ -20,10 +20,8 @@ LOG = logging.getLogger(__name__)
 class RDMATarget(driver.Target):
     """Target object for block storage devices with RDMA transport.
     """
-    PROTOCOL = 'RDMA'
 
-    def __init__(self, *args, **kwargs):
-        super(RDMATarget, self).__init__(*args, **kwargs)
+    PROTOCOL = 'RDMA'
 
     def initialize_connection(self, volume, connector):
         return {
