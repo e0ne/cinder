@@ -21,7 +21,7 @@ class RDMATarget(driver.Target):
     """Target object for block storage devices with RDMA transport.
     """
 
-    PROTOCOL = 'RDMA'
+    PROTOCOL = 'rdma'
 
     def initialize_connection(self, volume, connector):
         return {
