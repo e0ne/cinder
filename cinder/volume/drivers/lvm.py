@@ -36,6 +36,20 @@ from cinder import utils
 from cinder.volume import driver
 from cinder.volume import utils as volutils
 
+
+import sys
+import json
+import time
+import socket
+import base64
+
+try:
+    from urllib.request import (Request,
+                                urlopen)
+except ImportError:
+    from urllib2 import (Request,
+                         urlopen)
+
 LOG = logging.getLogger(__name__)
 
 # FIXME(jdg):  We'll put the lvm_ prefix back on these when we
@@ -78,6 +92,14 @@ volume_opts = [
 
 CONF = cfg.CONF
 CONF.register_opts(volume_opts)
+
+user = "admin"
+password = "targetd"
+host = 'localhost'
+port = 18700
+path = '/targetrpc'
+id_num = 1
+ssl = False
 
 
 @interface.volumedriver
@@ -122,6 +144,42 @@ class LVMVolumeDriver(driver.VolumeDriver):
             self.configuration.max_over_subscription_ratio = \
                 self.configuration.lvm_max_over_subscription_ratio
 
+    def targetd_rpc(self, method, **kwargs):
+        global id_num
+        data = json.dumps(
+            dict(id=id_num, method=method, params=kwargs, jsonrpc="2.0"))
+        id_num += 1
+        username_pass = '%s:%s' % (user, password)
+        auth = base64.b64encode(username_pass.encode('utf-8')).decode('utf-8')
+        headers = {'Content-Type': 'application/json',
+                   'Authorization': 'Basic %s' % (auth,)}
+        #print('Sending JSON data: %s' % data)
+        if ssl:
+            scheme = 'https'
+        else:
+            scheme = 'http'
+        url = "%s://%s:%s%s" % (scheme, host, port, path)
+        try:
+            request = Request(url, data.encode('utf-8'), headers)
+            response_obj = urlopen(request)
+        except socket.error as e:
+            print("error, retrying with SSL")
+            url = "https://%s:%s%s" % (host, port, path)
+            request = Request(url, data, headers)
+            response_obj = urlopen(request)
+        response_data = response_obj.read().decode('utf-8')
+        #print('Got response: %s' % response_data)
+        response = json.loads(response_data)
+        #Ensure we have version string
+        assert response.get('jsonrpc') == "2.0"
+        if response.get('error') is not None:
+            if response['error']['code'] <= 0:
+                raise Exception(response['error'].get('message', ''))
+            else:
+                print("Invalid error code, should be negative!")
+        else:
+            return response.get('result')
+
     def _sizestr(self, size_in_g):
         return '%sg' % size_in_g
 
@@ -137,7 +195,8 @@ class LVMVolumeDriver(driver.VolumeDriver):
         name = volume['name']
         if is_snapshot:
             name = self._escape_snapshot(volume['name'])
-        self.vg.delete(name)
+        #self.vg.delete(name)
+        self.targetd_rpc("vol_destroy", pool=self.configuration.volume_group, name=name)
 
     def _clear_volume(self, volume, is_snapshot=False):
         # zero out old volumes to prevent data leaking between users
@@ -196,7 +255,9 @@ class LVMVolumeDriver(driver.VolumeDriver):
         if vg is not None:
             vg_ref = vg
 
-        vg_ref.create_volume(name, size, lvm_type, mirror_count)
+#        vg_ref.create_volume(name, size, lvm_type, mirror_count)
+        size=size*units.Gi
+        self.targetd_rpc("vol_create", pool=self.configuration.volume_group, name=name, size=size)
 
     def _update_volume_stats(self):
         """Retrieve stats info from volume group."""
@@ -361,7 +422,7 @@ class LVMVolumeDriver(driver.VolumeDriver):
             mirror_count = self.configuration.lvm_mirrors
 
         self._create_volume(volume['name'],
-                            self._sizestr(volume['size']),
+                            volume['size'],
                             self.configuration.lvm_type,
                             mirror_count)
 
@@ -783,11 +844,22 @@ class LVMVolumeDriver(driver.VolumeDriver):
             vg = self.configuration.volume_group
 
         volume_path = "/dev/%s/%s" % (vg, volume['name'])
-
-        export_info = self.target_driver.create_export(
-            context,
-            volume,
-            volume_path)
+        import pdb;pdb.set_trace()
+#        export_info = self.target_driver.create_export(
+#            context,
+#            volume,
+#            volume_path)
+        lun = 1
+        export_info = self.targetd_rpc("export_create", pool=self.configuration.volume_group, vol=volume['name'], lun=lun, initiator_wwn=connector['initiator'])
+        exports = self.targetd_rpc("export_list")
+        for export in exports:
+            if export['vol_name'] == volume['name']:
+                location = '{ip}:{port},{lun} {iqn}:{volume} {lun}'.format(
+                    ip='10.13.0.69', port='3260', lun=lun,
+                    iqn=export['initiator_wwn'], volume=export['vol_name']
+                    )
+                return {'provider_location': location}
+        return
         return {'provider_location': export_info['location'],
                 'provider_auth': export_info['auth'], }
 
@@ -795,6 +867,22 @@ class LVMVolumeDriver(driver.VolumeDriver):
         self.target_driver.remove_export(context, volume)
 
     def initialize_connection(self, volume, connector):
+        import pdb;pdb.set_trace()
+#        (auth_method, auth_user, auth_pass) = \
+#            volume['provider_auth'].split(' ', 3)
+        initiator_wwn=connector['initiator']
+        in_user= '' #auth_user
+        in_pass='' #auth_pass
+        out_user=''#auth_user
+        out_pass=''#auth_pass
+        self.targetd_rpc('initiator_set_auth', initiator_wwn=initiator_wwn, in_user=in_user, in_pass=in_pass, out_user=out_user,
+                       out_pass=out_pass)
+
+        initiators = self.targetd_rpc('initiator_list')
+#         [{u'init_id': u'iqn.1993-08.org.debian:01:1a241bb48939', u'init_type': u'iscsi'}]
+        retval = {'driver_volume_type': 'iscsi', 'data': {'target_discovered': False, 'encrypted': False,
+                  'target_iqn': initiators[0]['init_id'], 'target_portal': u'10.13.0.69:3260', 'volume_id': volume['id'], 'target_lun': 1, 'auth_password': '', 'auth_username': '', 'auth_method': 'CHAP'}}
+        return retval
         return self.target_driver.initialize_connection(volume, connector)
 
     def validate_connector(self, connector):
