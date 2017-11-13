@@ -18,6 +18,7 @@ Manage backends in the current zone.
 """
 
 import collections
+import random
 
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -387,6 +388,7 @@ class HostManager(object):
     def __init__(self):
         self.service_states = {}  # { <host|cluster>: {<service>: {cap k : v}}}
         self.backend_state_map = {}
+        self.backup_service_states = {}
         self.filter_handler = filters.BackendFilterHandler('cinder.scheduler.'
                                                            'filters')
         self.filter_classes = self.filter_handler.get_all_classes()
@@ -473,7 +475,8 @@ class HostManager(object):
     def update_service_capabilities(self, service_name, host, capabilities,
                                     cluster_name, timestamp):
         """Update the per-service capabilities based on this notification."""
-        if service_name != 'volume':
+        ALLOWED_SERVICE_NAMES = ('volume', 'backup')
+        if service_name not in ALLOWED_SERVICE_NAMES:
             LOG.debug('Ignoring %(service_name)s service update '
                       'from %(host)s',
                       {'service_name': service_name, 'host': host})
@@ -488,6 +491,15 @@ class HostManager(object):
 
         # Set the default capabilities in case None is set.
         backend = cluster_name or host
+
+        if service_name == 'backup':
+            self.backup_service_states[backend] = capabilities
+            LOG.debug("Received %(service_name)s service update from "
+                      "%(host)s: %(cap)s",
+                      {'service_name': service_name, 'host': host,
+                       'cap': capabilities})
+            return
+
         capab_old = self.service_states.get(backend, {"timestamp": 0})
         capab_last_update = self.service_states_last_update.get(
             backend, {"timestamp": 0})
@@ -832,3 +844,72 @@ class HostManager(object):
         # If the capability and value are not in the same type,
         # we just convert them into string to compare them.
         return str(value) == str(capability)
+
+    def get_backup_host(self, volume, driver=None):
+        if volume:
+            volume_host = vol_utils.extract_host(volume.host, 'host')
+        else:
+            volume_host = None
+        az = volume.availability_zone if volume else None
+        return self._get_available_backup_service_host(volume_host, az, driver)
+
+    def _get_any_available_backup_service(self, availability_zone,
+                                          driver=None):
+        """Get an available backup service host.
+
+        Get an available backup service hostin the specified
+        availability zone.
+        """
+        services = [srv for srv in self._list_backup_services(
+            availability_zone, driver)]
+        random.shuffle(services)
+        return services[0] if services else None
+
+    def _get_available_backup_service_host(self, host, az, driver=None):
+        """Return an appropriate backup service host."""
+        backup_host = None
+        if not host or not CONF.backup_use_same_host:
+            backup_host = self._get_any_available_backup_service(az, driver)
+        elif self._is_backup_service_enabled(az, host):
+            backup_host = host
+        if not backup_host:
+            raise exception.ServiceNotFound(service_id='cinder-backup')
+        return backup_host
+
+    def _list_backup_services(self, availability_zone, driver=None):
+        """List all enabled backup services.
+
+        :returns: list -- hosts for services that are enabled for backup.
+        """
+        services = []
+
+        def _is_good_service(cap, driver, az):
+            if driver is None and az is None:
+                return True
+            match_driver = cap['driver_name'] == driver if driver else True
+            if match_driver and cap['availability_zone'] == az:
+                return True
+            return False
+
+        for backend, capabilities in self.backup_service_states.iteritems():
+            if capabilities['is_working']:
+                if _is_good_service(capabilities, driver, availability_zone):
+                    services.append(backend)
+
+        return services
+
+    def _az_matched(self, service, availability_zone):
+        return ((not availability_zone) or
+                service.availability_zone == availability_zone)
+
+    def _is_backup_service_enabled(self, availability_zone, host):
+        """Check if there is a backup service available."""
+        topic = constants.BACKUP_TOPIC
+        ctxt = cinder_context.get_admin_context()
+        services = objects.ServiceList.get_all_by_topic(
+            ctxt, topic, disabled=False)
+        for srv in services:
+            if (self._az_matched(srv, availability_zone) and
+                    srv.host == host and srv.is_up):
+                return True
+        return False

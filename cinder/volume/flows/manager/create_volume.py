@@ -22,8 +22,6 @@ import taskflow.engines
 from taskflow.patterns import linear_flow
 from taskflow.types import failure as ft
 
-from cinder import backup as backup_api
-from cinder.backup import rpcapi as backup_rpcapi
 from cinder import context as cinder_context
 from cinder import coordination
 from cinder import exception
@@ -372,15 +370,15 @@ class CreateVolumeFromSpecTask(flow_utils.CinderTask):
 
     default_provides = 'volume_spec'
 
-    def __init__(self, manager, db, driver, image_volume_cache=None):
+    def __init__(self, manager, db, driver, scheduler_rpcapi,
+                 image_volume_cache=None):
         super(CreateVolumeFromSpecTask, self).__init__(addons=[ACTION])
         self.manager = manager
         self.db = db
         self.driver = driver
         self.image_volume_cache = image_volume_cache
         self.message = message_api.API()
-        self.backup_api = backup_api.API()
-        self.backup_rpcapi = backup_rpcapi.BackupAPI()
+        self.scheduler_rpcapi = scheduler_rpcapi
 
     def _handle_bootable_volume_glance_meta(self, context, volume,
                                             **kwargs):
@@ -913,16 +911,12 @@ class CreateVolumeFromSpecTask(flow_utils.CinderTask):
             volume.update(model_update)
             volume.save()
 
-            backup_host = self.backup_api.get_available_backup_service_host(
-                backup.host, backup.availability_zone)
             updates = {'status': fields.BackupStatus.RESTORING,
-                       'restore_volume_id': volume.id,
-                       'host': backup_host}
+                       'restore_volume_id': volume.id}
             backup.update(updates)
             backup.save()
 
-            self.backup_rpcapi.restore_backup(context, backup.host, backup,
-                                              volume.id)
+            self.scheduler_rpcapi.restore_backup(context, backup, volume.id)
             need_update_volume = False
 
         LOG.info("Created volume %(volume_id)s from backup %(backup_id)s "
@@ -1113,6 +1107,7 @@ def get_flow(context, manager, db, driver, scheduler_rpcapi, host, volume,
                     CreateVolumeFromSpecTask(manager,
                                              db,
                                              driver,
+                                             scheduler_rpcapi,
                                              image_volume_cache),
                     CreateVolumeOnFinishTask(db, "create.end"))
 

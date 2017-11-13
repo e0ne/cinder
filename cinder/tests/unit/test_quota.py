@@ -24,7 +24,6 @@ from oslo_utils import timeutils
 import six
 
 from cinder import backup
-from cinder.backup import api as backup_api
 from cinder import context
 from cinder import db
 from cinder.db.sqlalchemy import api as sqa_api
@@ -205,21 +204,17 @@ class QuotaIntegrationTestCase(test.TestCase):
         self.flags(**flag_args)
         vol_ref = self._create_volume()
         backup_ref = self._create_backup(vol_ref)
-        with mock.patch.object(backup_api.API,
-                               '_get_available_backup_service_host') as \
-                mock__get_available_backup_service:
-            mock__get_available_backup_service.return_value = 'host'
-            self.assertRaises(exception.BackupLimitExceeded,
-                              backup.API().create,
-                              self.context,
-                              'name',
-                              'description',
-                              vol_ref['id'],
-                              'container',
-                              False,
-                              None)
-            db.backup_destroy(self.context, backup_ref['id'])
-            db.volume_destroy(self.context, vol_ref['id'])
+        self.assertRaises(exception.BackupLimitExceeded,
+                          backup.API().create,
+                          self.context,
+                          'name',
+                          'description',
+                          vol_ref['id'],
+                          'container',
+                          False,
+                          None)
+        db.backup_destroy(self.context, backup_ref['id'])
+        db.volume_destroy(self.context, vol_ref['id'])
 
     def test_too_many_gigabytes(self):
         volume_ids = []
@@ -249,21 +244,17 @@ class QuotaIntegrationTestCase(test.TestCase):
     def test_too_many_combined_backup_gigabytes(self):
         vol_ref = self._create_volume(size=10000)
         backup_ref = self._create_backup(vol_ref)
-        with mock.patch.object(backup_api.API,
-                               '_get_available_backup_service_host') as \
-                mock__get_available_backup_service:
-            mock__get_available_backup_service.return_value = 'host'
-            self.assertRaises(
-                exception.VolumeBackupSizeExceedsAvailableQuota,
-                backup.API().create,
-                context=self.context,
-                name='name',
-                description='description',
-                volume_id=vol_ref['id'],
-                container='container',
-                incremental=False)
-            db.backup_destroy(self.context, backup_ref['id'])
-            vol_ref.destroy()
+        self.assertRaises(
+            exception.VolumeBackupSizeExceedsAvailableQuota,
+            backup.API().create,
+            context=self.context,
+            name='name',
+            description='description',
+            volume_id=vol_ref['id'],
+            container='container',
+            incremental=False)
+        db.backup_destroy(self.context, backup_ref['id'])
+        vol_ref.destroy()
 
     def test_no_snapshot_gb_quota_flag(self):
         self.mock_object(scheduler_rpcapi.SchedulerAPI, 'create_snapshot')
@@ -296,29 +287,25 @@ class QuotaIntegrationTestCase(test.TestCase):
                    )
         vol_ref = self._create_volume(size=10)
         backup_ref = self._create_backup(vol_ref)
-        with mock.patch.object(backup_api.API,
-                               '_get_available_backup_service_host') as \
-                mock_mock__get_available_backup_service:
-            mock_mock__get_available_backup_service.return_value = 'host'
-            backup_ref2 = backup.API().create(self.context,
-                                              'name',
-                                              'description',
-                                              vol_ref['id'],
-                                              'container',
-                                              False,
-                                              None)
+        backup_ref2 = backup.API().create(self.context,
+                                          'name',
+                                          'description',
+                                          vol_ref['id'],
+                                          'container',
+                                          False,
+                                          None)
 
-            # Make sure the backup volume_size isn't included in usage.
-            vol_ref2 = volume.API().create(self.context, 10, '', '')
-            usages = db.quota_usage_get_all_by_project(self.context,
-                                                       self.project_id)
-            self.assertEqual(20, usages['gigabytes']['in_use'])
-            self.assertEqual(0, usages['gigabytes']['reserved'])
+        # Make sure the backup volume_size isn't included in usage.
+        vol_ref2 = volume.API().create(self.context, 10, '', '')
+        usages = db.quota_usage_get_all_by_project(self.context,
+                                                   self.project_id)
+        self.assertEqual(20, usages['gigabytes']['in_use'])
+        self.assertEqual(0, usages['gigabytes']['reserved'])
 
-            db.backup_destroy(self.context, backup_ref['id'])
-            db.backup_destroy(self.context, backup_ref2['id'])
-            vol_ref.destroy()
-            vol_ref2.destroy()
+        db.backup_destroy(self.context, backup_ref['id'])
+        db.backup_destroy(self.context, backup_ref2['id'])
+        vol_ref.destroy()
+        vol_ref2.destroy()
 
     def test_too_many_gigabytes_of_type(self):
         resource = 'gigabytes_%s' % self.volume_type_name

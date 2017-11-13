@@ -33,6 +33,7 @@ from oslo_utils import timeutils
 from oslo_utils import versionutils
 import six
 
+from cinder.backup import rpcapi as backup_rpcapi
 from cinder import context
 from cinder import db
 from cinder import exception
@@ -79,6 +80,7 @@ class SchedulerManager(manager.CleanableManager, manager.Manager):
         self.volume_api = volume_rpcapi.VolumeAPI()
         self.sch_api = scheduler_rpcapi.SchedulerAPI()
         self.message_api = mess_api.API()
+        self.backup_api = backup_rpcapi.BackupAPI()
         self.rpc_api_version = versionutils.convert_version_to_int(
             self.RPC_API_VERSION)
 
@@ -228,6 +230,7 @@ class SchedulerManager(manager.CleanableManager, manager.Manager):
 
     def request_service_capabilities(self, context):
         volume_rpcapi.VolumeAPI().publish_service_capabilities(context)
+        self.backup_api.publish_service_capabilities(context)
 
     def migrate_volume(self, context, volume, backend, force_copy,
                        request_spec, filter_properties):
@@ -549,3 +552,48 @@ class SchedulerManager(manager.CleanableManager, manager.Manager):
 
         LOG.info('Cleanup requests completed.')
         return requested, not_requested
+
+    def create_backup(self, context, backup):
+        volume = self.db.volume_get(context, backup.volume_id)
+        host = self.driver.get_backup_host(volume)
+        backup.host = host
+        backup.save()
+        self.backup_api.create_backup(context, backup)
+
+    def restore_backup(self, context, backup, volume_id):
+        volume = self.db.volume_get(context, volume_id)
+        host = self.driver.get_backup_host(volume)
+        backup.host = host
+        backup.save()
+        self.backup_api.restore_backup(context, backup.host, backup,
+                                       volume_id)
+
+    def delete_backup(self, context, backup):
+        # TODO(e0ne): refactor 'get_backup_host' to work w/o volume
+        volume = self.db.volume_get(context, backup.volume_id)
+        host = self.driver.get_backup_host(volume)
+        backup.host = host
+        backup.save()
+        self.backup_api.delete_backup(context, backup)
+
+    def export_backup(self, context, backup):
+        # TODO(e0ne): refactor 'get_backup_host' to work w/o volume
+        volume = self.db.volume_get(context, backup.volume_id)
+        host = self.driver.get_backup_host(volume)
+        backup.host = host
+        backup.save()
+        return self.backup_api.export_record(context, backup)
+
+    def import_backup(self, context, backup, backup_service, backup_url):
+        host = self.driver.get_backup_host(None, backup_service)
+        backup.host = host
+        backup.save()
+        return self.backup_api.import_record(context, host, backup,
+                                             backup_service, backup_url, None)
+
+    def reset_backup_status(self, context, backup, status):
+        volume = self.db.volume_get(context, backup.volume_id)
+        host = self.driver.get_backup_host(volume)
+        backup.host = host
+        backup.save()
+        return self.backup_api.reset_status(context, backup, status)

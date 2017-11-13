@@ -1631,13 +1631,10 @@ class BackupAPITestCase(BaseBackupTest):
             ctxt, ctxt.project_id, {'key': 'value'}, None, None, None, None,
             None)
 
-    @mock.patch.object(api.API, '_get_available_backup_service_host',
-                       return_value='fake_host')
     @mock.patch.object(db, 'backup_create',
                        side_effect=db_exc.DBError())
     def test_create_when_failed_to_create_backup_object(
-            self, mock_create,
-            mock_get_service):
+            self, mock_create):
 
         # Create volume in admin context
         volume_id = utils.create_volume(self.ctxt)['id']
@@ -1660,13 +1657,10 @@ class BackupAPITestCase(BaseBackupTest):
                           volume_id=volume_id,
                           container='volumebackups')
 
-    @mock.patch.object(api.API, '_get_available_backup_service_host',
-                       return_value='fake_host')
     @mock.patch.object(objects.Backup, '__init__',
                        side_effect=exception.InvalidInput(
                            reason='Failed to new'))
-    def test_create_when_failed_to_new_backup_object(self, mock_new,
-                                                     mock_get_service):
+    def test_create_when_failed_to_new_backup_object(self, mock_new):
         volume_id = utils.create_volume(self.ctxt)['id']
 
         # The opposite side of this test case is that a "UnboundLocalError:
@@ -1682,24 +1676,8 @@ class BackupAPITestCase(BaseBackupTest):
                           container='volumebackups')
 
     @mock.patch('cinder.backup.rpcapi.BackupAPI.create_backup')
-    @mock.patch('cinder.backup.api.API._is_backup_service_enabled')
-    def test_create_backup_in_same_host(self, mock_is_enable,
-                                        mock_create):
-        self.override_config('backup_use_same_host', True)
-        mock_is_enable.return_value = True
-        self.ctxt.user_id = 'fake_user'
-        self.ctxt.project_id = 'fake_project'
-        volume_id = self._create_volume_db_entry(status='available',
-                                                 host='testhost#lvm',
-                                                 size=1)
-        backup = self.api.create(self.ctxt, None, None, volume_id, None)
-        self.assertEqual('testhost', backup.host)
-
-    @mock.patch.object(api.API, '_get_available_backup_service_host',
-                       return_value='fake_host')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.create_backup')
     def test_create_backup_from_snapshot_with_volume_in_use(
-            self, mock_create, mock_get_service):
+            self, mock_create):
         self.ctxt.user_id = 'fake_user'
         self.ctxt.project_id = 'fake_project'
         volume_id = self._create_volume_db_entry(status='in-use')
@@ -1713,12 +1691,9 @@ class BackupAPITestCase(BaseBackupTest):
         self.assertEqual(fields.SnapshotStatus.BACKING_UP, snapshot.status)
         self.assertEqual('in-use', volume.status)
 
-    @mock.patch.object(api.API, '_get_available_backup_service_host',
-                       return_value='fake_host')
     @mock.patch('cinder.backup.rpcapi.BackupAPI.create_backup')
     @ddt.data(True, False)
-    def test_create_backup_resource_status(self, is_snapshot, mock_create,
-                                           mock_get_service):
+    def test_create_backup_resource_status(self, is_snapshot, mock_create):
         self.ctxt.user_id = 'fake_user'
         self.ctxt.project_id = 'fake_project'
         volume_id = self._create_volume_db_entry(status='available')
@@ -1739,16 +1714,13 @@ class BackupAPITestCase(BaseBackupTest):
             self.assertEqual('available', snapshot.status)
             self.assertEqual('backing-up', volume.status)
 
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
     @mock.patch('cinder.backup.rpcapi.BackupAPI.restore_backup')
     def test_restore_volume(self,
-                            mock_rpcapi_restore,
-                            mock_get_backup_host):
+                            mock_rpcapi_restore):
         volume_id = self._create_volume_db_entry(status='available',
                                                  size=1)
         backup = self._create_backup_db_entry(size=1,
                                               status='available')
-        mock_get_backup_host.return_value = 'testhost'
         self.api.restore(self.ctxt, backup.id, volume_id)
         backup = objects.Backup.get_by_id(self.ctxt, backup.id)
         self.assertEqual(volume_id, backup.restore_volume_id)

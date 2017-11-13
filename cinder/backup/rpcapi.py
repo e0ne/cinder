@@ -111,3 +111,8 @@ class BackupAPI(rpc.RPCAPI):
     def get_log_levels(self, context, service, log_request):
         cctxt = self._get_cctxt(server=service.host, version='2.1')
         return cctxt.call(context, 'get_log_levels', log_request=log_request)
+
+    @rpc.assert_min_rpc_version('2.1')
+    def publish_service_capabilities(self, ctxt):
+        cctxt = self._get_cctxt(fanout=True)
+        cctxt.cast(ctxt, 'publish_service_capabilities')

@@ -71,9 +71,11 @@ class SchedulerAPI(rpc.RPCAPI):
         3.8 - Addds ``valid_host_capacity`` method
         3.9 - Adds create_snapshot method
         3.10 - Adds backup_id to create_volume method.
+        3.11 - Adds backups-related methods
     """
 
-    RPC_API_VERSION = '3.10'
+    RPC_API_VERSION = '3.11'
+
     RPC_DEFAULT_VERSION = '3.0'
     TOPIC = constants.SCHEDULER_TOPIC
     BINARY = 'cinder-scheduler'
@@ -245,3 +247,41 @@ class SchedulerAPI(rpc.RPCAPI):
     def get_log_levels(self, context, service, log_request):
         cctxt = self._get_cctxt(server=service.host, version='3.7')
         return cctxt.call(context, 'get_log_levels', log_request=log_request)
+
+    @rpc.assert_min_rpc_version('3.11')
+    def create_backup(self, ctxt, backup):
+        cctxt = self._get_cctxt()
+        msg_args = {'backup': backup}
+        return cctxt.cast(ctxt, 'create_backup', **msg_args)
+
+    @rpc.assert_min_rpc_version('3.11')
+    def restore_backup(self, ctxt, backup, volume_id):
+        cctxt = self._get_cctxt()
+        msg_args = {'backup': backup, 'volume_id': volume_id}
+        cctxt.cast(ctxt, 'restore_backup', **msg_args)
+
+    @rpc.assert_min_rpc_version('3.11')
+    def delete_backup(self, ctxt, backup):
+        cctxt = self._get_cctxt()
+        msg_args = {'backup': backup}
+        cctxt.cast(ctxt, 'delete_backup', **msg_args)
+
+    @rpc.assert_min_rpc_version('3.11')
+    def export_backup(self, ctxt, backup):
+        cctxt = self._get_cctxt()
+        msg_args = {'backup': backup}
+        return cctxt.call(ctxt, 'export_backup', **msg_args)
+
+    @rpc.assert_min_rpc_version('3.11')
+    def import_backup(self, ctxt, backup, backup_service, backup_url):
+        cctxt = self._get_cctxt()
+        msg_args = {'backup': backup,
+                    'backup_service': backup_service,
+                    'backup_url': backup_url}
+        return cctxt.call(ctxt, 'import_backup', **msg_args)
+
+    @rpc.assert_min_rpc_version('3.11')
+    def reset_backup_status(self, ctxt, backup, status):
+        cctxt = self._get_cctxt()
+        msg_args = {'backup': backup, 'status': status}
+        return cctxt.call(ctxt, 'reset_backup_status', **msg_args)

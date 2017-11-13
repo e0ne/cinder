@@ -24,7 +24,6 @@ from webob import exc
 
 from cinder.api.contrib import admin_actions
 from cinder.api import microversions as mv
-from cinder.backup import api as backup_api
 from cinder.backup import rpcapi as backup_rpcapi
 from cinder.common import constants
 from cinder import context
@@ -135,9 +134,6 @@ class AdminActionsTest(BaseAdminTest):
                                           updated_status)
 
     def _issue_backup_reset(self, ctx, backup, updated_status):
-        self.mock_object(backup_api.API,
-                         '_get_available_backup_service_host',
-                         return_value='testhost')
         return self._issue_resource_reset(ctx,
                                           'backups',
                                           backup['id'],
@@ -1200,3 +1196,26 @@ class AdminActionsAttachDetachTest(BaseAdminTest):
                           None,
                           mountpoint,
                           'ro')
+
+
+def test_import_record_with_no_backup_services(self):
+        ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
+                                     is_admin=True)
+        backup_service = 'fake'
+        backup_url = 'fake'
+        req = webob.Request.blank('/v2/%s/backups/import_record' %
+                                  fake.PROJECT_ID)
+        body = {'backup-record': {'backup_service': backup_service,
+                                  'backup_url': backup_url}}
+        req.body = jsonutils.dump_as_bytes(body)
+        req.method = 'POST'
+        req.headers['content-type'] = 'application/json'
+
+        res = req.get_response(fakes.wsgi_app(fake_auth_context=ctx))
+        res_dict = jsonutils.loads(res.body)
+        self.assertEqual(http_client.SERVICE_UNAVAILABLE, res.status_int)
+        self.assertEqual(http_client.SERVICE_UNAVAILABLE,
+                         res_dict['serviceUnavailable']['code'])
+        self.assertEqual('Service %s could not be found.'
+                         % backup_service,
+                         res_dict['serviceUnavailable']['message'])

@@ -34,6 +34,7 @@ from cinder.scheduler import host_manager
 from cinder import test
 from cinder.tests.unit import fake_constants as fake
 from cinder.tests.unit.objects import test_service
+from cinder.tests.unit import utils
 
 
 class FakeFilterClass1(filters.BaseBackendFilter):
@@ -1178,6 +1179,125 @@ class HostManagerTestCase(test.TestCase):
     def test_equal_after_convert(self, cap, value, ret_value):
         self.assertEqual(ret_value,
                          self.host_manager._equal_after_convert(cap, value))
+
+    def test_get_available_backup_service(self):
+        self.host_manager.backup_service_states = {
+            'testhost1': {'availability_zone': 'az1', 'is_working': True},
+            'testhost2': {'availability_zone': 'az2', 'is_working': True},
+            'testhost3': {'availability_zone': 'az2', 'is_working': True}
+        }
+        actual_host = self.host_manager._get_available_backup_service_host(
+            None, 'az1')
+        self.assertEqual('testhost1', actual_host)
+        actual_host = self.host_manager._get_available_backup_service_host(
+            'testhost2', 'az2')
+        self.assertIn(actual_host, ['testhost2', 'testhost3'])
+        actual_host = self.host_manager._get_available_backup_service_host(
+            'testhost4', 'az1')
+        self.assertEqual('testhost1', actual_host)
+
+    @mock.patch('cinder.db.service_get_all')
+    def test_get_available_backup_service_with_same_host(
+            self, _mock_service_get_all):
+        _mock_service_get_all.return_value = [
+            {'availability_zone': 'az1', 'host': 'testhost1',
+             'disabled': 0, 'updated_at': timeutils.utcnow(),
+             'uuid': 'a3a593da-7f8d-4bb7-8b4c-f2bc1e0b4824'},
+            {'availability_zone': 'az2', 'host': 'testhost2',
+             'disabled': 0, 'updated_at': timeutils.utcnow(),
+             'uuid': '4200b32b-0bf9-436c-86b2-0675f6ac218e'}, ]
+        self.override_config('backup_use_same_host', True)
+        self.host_manager.backup_service_states = {
+            'testhost1': {'availability_zone': 'az1', 'is_working': True},
+            'testhost2': {'availability_zone': 'az2', 'is_working': True},
+            'testhost3': {'availability_zone': 'az2', 'is_working': True}
+        }
+        actual_host = self.host_manager._get_available_backup_service_host(
+            None, 'az1')
+        self.assertEqual('testhost1', actual_host)
+        actual_host = self.host_manager._get_available_backup_service_host(
+            'testhost2', 'az2')
+        self.assertEqual('testhost2', actual_host)
+        self.assertRaises(exception.ServiceNotFound,
+                          self.host_manager._get_available_backup_service_host,
+                          'testhost4', 'az1')
+
+    @mock.patch('cinder.db.service_get_all')
+    def test_is_backup_service_enabled(self, _mock_service_get_all):
+
+        testhost = 'test_host'
+        alt_host = 'strange_host'
+        empty_service = []
+        # service host not match with volume's host
+        host_not_match = [{'availability_zone': 'fake_az', 'host': alt_host,
+                           'disabled': 0, 'updated_at': timeutils.utcnow(),
+                           'uuid': 'a3a593da-7f8d-4bb7-8b4c-f2bc1e0b4824'}]
+        # service az not match with volume's az
+        az_not_match = [{'availability_zone': 'strange_az', 'host': testhost,
+                         'disabled': 0, 'updated_at': timeutils.utcnow(),
+                         'uuid': '4200b32b-0bf9-436c-86b2-0675f6ac218e'}]
+        # service disabled
+        disabled_service = []
+
+        # dead service that last reported at 20th century
+        dead_service = [{'availability_zone': 'fake_az', 'host': alt_host,
+                         'disabled': 0, 'updated_at': '1989-04-16 02:55:44',
+                        'uuid': '6d91e7f5-ca17-4e3b-bf4f-19ca77166dd7'}]
+
+        # first service's host not match but second one works.
+        multi_services = [{'availability_zone': 'fake_az', 'host': alt_host,
+                           'disabled': 0, 'updated_at': timeutils.utcnow(),
+                           'uuid': '18417850-2ca9-43d1-9619-ae16bfb0f655'},
+                          {'availability_zone': 'fake_az', 'host': testhost,
+                           'disabled': 0, 'updated_at': timeutils.utcnow(),
+                           'uuid': 'f838f35c-4035-464f-9792-ce60e390c13d'}]
+
+        # Setup mock to run through the following service cases
+        _mock_service_get_all.side_effect = [empty_service,
+                                             host_not_match,
+                                             az_not_match,
+                                             disabled_service,
+                                             dead_service,
+                                             multi_services]
+
+        ctxt = ctxt = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
+                                             True)
+        volume = utils.create_volume(ctxt, size=2, host=testhost)
+
+        # test empty service
+        self.assertEqual(False,
+                         self.host_manager._is_backup_service_enabled(
+                             volume.availability_zone,
+                             testhost))
+
+        # test host not match service
+        self.assertEqual(False,
+                         self.host_manager._is_backup_service_enabled(
+                             volume.availability_zone,
+                             testhost))
+
+        # test az not match service
+        self.assertEqual(False,
+                         self.host_manager._is_backup_service_enabled(
+                             volume.availability_zone,
+                             testhost))
+
+        # test disabled service
+        self.assertEqual(False,
+                         self.host_manager._is_backup_service_enabled(
+                             volume.availability_zone,
+                             testhost))
+
+        # test dead service
+        self.assertEqual(False,
+                         self.host_manager._is_backup_service_enabled(
+                             volume.availability_zone,
+                             testhost))
+
+        # test multi services and the last service matches
+        self.assertTrue(self.host_manager._is_backup_service_enabled(
+                        volume.availability_zone,
+                        testhost))
 
 
 class BackendStateTestCase(test.TestCase):

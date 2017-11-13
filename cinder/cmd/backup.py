@@ -55,6 +55,7 @@ def main():
     utils.monkey_patch()
     gmr.TextGuruMeditation.setup_autorun(version, conf=CONF)
     server = service.Service.create(binary='cinder-backup',
+                                    service_name='backup',
                                     coordination=True)
     service.serve(server)
     service.wait()

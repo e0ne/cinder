@@ -26,11 +26,8 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import strutils
 from pytz import timezone
-import random
 
 from cinder.backup import rpcapi as backup_rpcapi
-from cinder.common import constants
-from cinder import context
 from cinder.db import base
 from cinder import exception
 from cinder.i18n import _
@@ -40,9 +37,9 @@ from cinder.policies import backups as policy
 import cinder.policy
 from cinder import quota
 from cinder import quota_utils
+from cinder.scheduler import rpcapi as scheduler_rpcapi
 from cinder import utils
 import cinder.volume
-from cinder.volume import utils as volume_utils
 
 backup_api_opts = [
     cfg.BoolOpt('backup_use_same_host',
@@ -62,6 +59,7 @@ class API(base.Base):
 
     def __init__(self, db=None):
         self.backup_rpcapi = backup_rpcapi.BackupAPI()
+        self.scheduler_rpcapi = scheduler_rpcapi.SchedulerAPI()
         self.volume_api = cinder.volume.API()
         super(API, self).__init__(db)
 
@@ -103,10 +101,8 @@ class API(base.Base):
             raise exception.InvalidBackup(reason=msg)
 
         backup.status = fields.BackupStatus.DELETING
-        backup.host = self._get_available_backup_service_host(
-            backup.host, backup.availability_zone)
         backup.save()
-        self.backup_rpcapi.delete_backup(context, backup)
+        self.scheduler_rpcapi.delete_backup(context, backup)
 
     def get_all(self, context, search_opts=None, marker=None, limit=None,
                 offset=None, sort_keys=None, sort_dirs=None):
@@ -130,70 +126,6 @@ class API(base.Base):
             )
 
         return backups
-
-    def _az_matched(self, service, availability_zone):
-        return ((not availability_zone) or
-                service.availability_zone == availability_zone)
-
-    def _is_backup_service_enabled(self, availability_zone, host):
-        """Check if there is a backup service available."""
-        topic = constants.BACKUP_TOPIC
-        ctxt = context.get_admin_context()
-        services = objects.ServiceList.get_all_by_topic(
-            ctxt, topic, disabled=False)
-        for srv in services:
-            if (self._az_matched(srv, availability_zone) and
-                    srv.host == host and srv.is_up):
-                return True
-        return False
-
-    def _get_any_available_backup_service(self, availability_zone):
-        """Get an available backup service host.
-
-        Get an available backup service host in the specified
-        availability zone.
-        """
-        services = [srv for srv in self._list_backup_services()]
-        random.shuffle(services)
-        # Get the next running service with matching availability zone.
-        idx = 0
-        while idx < len(services):
-            srv = services[idx]
-            if(self._az_matched(srv, availability_zone) and
-               srv.is_up):
-                return srv.host
-            idx = idx + 1
-        return None
-
-    def get_available_backup_service_host(self, host, az):
-        return self._get_available_backup_service_host(host, az)
-
-    def _get_available_backup_service_host(self, host, az):
-        """Return an appropriate backup service host."""
-        backup_host = None
-        if not host or not CONF.backup_use_same_host:
-            backup_host = self._get_any_available_backup_service(az)
-        elif self._is_backup_service_enabled(az, host):
-            backup_host = host
-        if not backup_host:
-            raise exception.ServiceNotFound(service_id='cinder-backup')
-        return backup_host
-
-    def _list_backup_services(self):
-        """List all enabled backup services.
-
-        :returns: list -- hosts for services that are enabled for backup.
-        """
-        topic = constants.BACKUP_TOPIC
-        ctxt = context.get_admin_context()
-        services = objects.ServiceList.get_all_by_topic(
-            ctxt, topic, disabled=False)
-        return services
-
-    def _list_backup_hosts(self):
-        services = self._list_backup_services()
-        return [srv.host for srv in services
-                if not srv.disabled and srv.is_up]
 
     def create(self, context, name, description, volume_id,
                container, incremental=False, availability_zone=None,
@@ -228,9 +160,6 @@ class API(base.Base):
             raise exception.InvalidVolume(reason=msg)
 
         previous_status = volume['status']
-        volume_host = volume_utils.extract_host(volume.host, 'host')
-        host = self._get_available_backup_service_host(
-            volume_host, volume.availability_zone)
 
         # Reserve a quota before setting volume status and backup status
         try:
@@ -308,7 +237,6 @@ class API(base.Base):
                 'container': container,
                 'parent_id': parent_id,
                 'size': volume['size'],
-                'host': host,
                 'snapshot_id': snapshot_id,
                 'data_timestamp': data_timestamp,
                 'metadata': metadata or {}
@@ -327,10 +255,7 @@ class API(base.Base):
                 finally:
                     QUOTAS.rollback(context, reservations)
 
-        # TODO(DuncanT): In future, when we have a generic local attach,
-        #                this can go via the scheduler, which enables
-        #                better load balancing and isolation of services
-        self.backup_rpcapi.create_backup(context, backup)
+        self.scheduler_rpcapi.create_backup(context, backup)
 
         return backup
 
@@ -393,16 +318,13 @@ class API(base.Base):
 
         # Setting the status here rather than setting at start and unrolling
         # for each error condition, it should be a very small window
-        backup.host = self._get_available_backup_service_host(
-            backup.host, backup.availability_zone)
         backup.status = fields.BackupStatus.RESTORING
         backup.restore_volume_id = volume.id
         backup.save()
         self.db.volume_update(context, volume_id, {'status':
                                                    'restoring-backup'})
 
-        self.backup_rpcapi.restore_backup(context, backup.host, backup,
-                                          volume_id)
+        self.scheduler_rpcapi.restore_backup(context, backup, volume_id)
 
         d = {'backup_id': backup_id,
              'volume_id': volume_id,
@@ -421,9 +343,6 @@ class API(base.Base):
         """
         # get backup info
         backup = self.get(context, backup_id)
-        backup.host = self._get_available_backup_service_host(
-            backup.host, backup.availability_zone)
-        backup.save()
         # send to manager to do reset operation
         self.backup_rpcapi.reset_status(ctxt=context, backup=backup,
                                         status=status)
@@ -452,10 +371,7 @@ class API(base.Base):
                    'host': backup['host'],
                    'id': backup['id']})
 
-        backup.host = self._get_available_backup_service_host(
-            backup.host, backup.availability_zone)
-        backup.save()
-        export_data = self.backup_rpcapi.export_record(context, backup)
+        export_data = self.scheduler_rpcapi.export_backup(context, backup)
 
         return export_data
 
@@ -536,26 +452,13 @@ class API(base.Base):
         """
         context.authorize(policy.IMPORT_POLICY)
 
-        # NOTE(ronenkat): since we don't have a backup-scheduler
-        # we need to find a host that support the backup service
-        # that was used to create the backup.
-        # We  send it to the first backup service host, and the backup manager
-        # on that host will forward it to other hosts on the hosts list if it
-        # cannot support correct service itself.
-        hosts = self._list_backup_hosts()
-        if len(hosts) == 0:
-            raise exception.ServiceNotFound(service_id=backup_service)
-
         # Get Backup object that will be used to import this backup record
         backup = self._get_import_backup(context, backup_url)
 
-        first_host = hosts.pop()
-        self.backup_rpcapi.import_record(context,
-                                         first_host,
-                                         backup,
-                                         backup_service,
-                                         backup_url,
-                                         hosts)
+        self.scheduler_rpcapi.import_backup(context,
+                                            backup,
+                                            backup_service,
+                                            backup_url)
 
         return backup
 

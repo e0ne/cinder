@@ -82,7 +82,7 @@ CONF.import_opt('num_volume_device_scan_tries', 'cinder.volume.driver')
 QUOTAS = quota.QUOTAS
 
 
-class BackupManager(manager.ThreadPoolManager):
+class BackupManager(manager.SchedulerDependentManager):
     """Manages backup of block storage devices."""
 
     RPC_API_VERSION = backup_rpcapi.BackupAPI.RPC_API_VERSION
@@ -147,6 +147,8 @@ class BackupManager(manager.ThreadPoolManager):
         except Exception:
             # Don't block startup of the backup service.
             LOG.exception("Problem cleaning incomplete backup operations.")
+
+        self.publish_service_capabilities(ctxt)
 
     def _setup_backup_driver(self, ctxt):
         backup_service = self.get_backup_driver(ctxt)
@@ -996,7 +998,18 @@ class BackupManager(manager.ThreadPoolManager):
     def is_working(self):
         return self.is_initialized
 
+    def publish_service_capabilities(self, context):
+        """Collect driver status and then publish."""
+        self._report_driver_status(context)
+        self._publish_service_capabilities(context)
+
     @periodic_task.periodic_task(spacing=CONF.periodic_interval)
     def _report_driver_status(self, context):
         if not self.is_working():
             self.setup_backup_backend(context)
+        backup_stats = {
+            'is_working': self.is_working(),
+            'driver_name': self.driver_name,
+            'availability_zone': self.az
+        }
+        self.update_service_capabilities(backup_stats)

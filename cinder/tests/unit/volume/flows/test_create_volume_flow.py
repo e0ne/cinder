@@ -850,8 +850,9 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
         fake_volume_manager = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            fake_volume_manager, fake_db, fake_driver)
+            fake_volume_manager, fake_db, fake_driver, fake_scheduler_api)
         volume_db = {'bootable': True}
         volume_obj = fake_volume.fake_volume_obj(self.ctxt, **volume_db)
         snapshot_obj = fake_snapshot.fake_snapshot_obj(self.ctxt)
@@ -867,16 +868,16 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
         cleanup_cg.assert_called_once_with(volume_obj)
 
     @mock.patch('cinder.volume.flows.manager.create_volume.'
-                'CreateVolumeFromSpecTask.'
-                '_cleanup_cg_in_volume')
+                'CreateVolumeFromSpecTask._cleanup_cg_in_volume')
     @mock.patch('cinder.objects.Snapshot.get_by_id')
     def test_create_from_snapshot_update_failure(self, snapshot_get_by_id,
                                                  mock_cleanup_cg):
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
         fake_volume_manager = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            fake_volume_manager, fake_db, fake_driver)
+            fake_volume_manager, fake_db, fake_driver, fake_scheduler_api)
         volume_obj = fake_volume.fake_volume_obj(self.ctxt)
         snapshot_obj = fake_snapshot.fake_snapshot_obj(self.ctxt)
         snapshot_get_by_id.return_value = snapshot_obj
@@ -907,8 +908,9 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
         fake_volume_manager = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            fake_volume_manager, fake_db, fake_driver)
+            fake_volume_manager, fake_db, fake_driver, fake_scheduler_api)
         volume = fake_volume.fake_volume_obj(
             self.ctxt,
             encryption_key_id=fakes.ENCRYPTION_KEY_ID,
@@ -953,8 +955,9 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
         fake_volume_manager = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            fake_volume_manager, fake_db, fake_driver)
+            fake_volume_manager, fake_db, fake_driver, fake_scheduler_api)
         volume = fake_volume.fake_volume_obj(
             self.ctxt,
             encryption_key_id=fakes.ENCRYPTION_KEY_ID,
@@ -988,8 +991,9 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
         fake_volume_manager = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            fake_volume_manager, fake_db, fake_driver)
+            fake_volume_manager, fake_db, fake_driver, fake_scheduler_api)
         key = fakes.ENCRYPTION_KEY_ID if is_encrypted else None
         volume = fake_volume.fake_volume_obj(
             self.ctxt,
@@ -1009,10 +1013,6 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
             fake_driver.copy_image_to_volume.assert_called_once_with(
                 self.ctxt, volume, fake_image_service, image_id)
 
-    @ddt.data({'driver_error': True},
-              {'driver_error': False})
-    @mock.patch('cinder.backup.api.API.get_available_backup_service_host')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.restore_backup')
     @mock.patch('oslo_service.loopingcall.'
                 'FixedIntervalWithTimeoutLoopingCall')
     @mock.patch('cinder.volume.flows.manager.create_volume.'
@@ -1022,23 +1022,14 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
     @mock.patch('cinder.db.backup_update')
     @mock.patch('cinder.objects.Volume.get_by_id')
     @mock.patch('cinder.objects.Backup.get_by_id')
-    @ddt.unpack
     def test_create_from_backup(self,
                                 backup_get_by_id,
                                 volume_get_by_id,
                                 mock_backup_update,
                                 mock_volume_update,
                                 mock_create_volume,
-                                mock_fixed_looping_call,
-                                mock_restore_backup,
-                                mock_get_backup_host,
-                                driver_error):
-        fake_db = mock.MagicMock()
-        fake_driver = mock.MagicMock()
-        fake_volume_manager = mock.MagicMock()
+                                mock_fixed_looping_call):
         backup_host = 'host@backend#pool'
-        fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            fake_volume_manager, fake_db, fake_driver)
 
         volume_obj = fake_volume.fake_volume_obj(self.ctxt)
         backup_obj = fake_backup.fake_backup_obj(self.ctxt,
@@ -1048,27 +1039,7 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
         volume_get_by_id.return_value = volume_obj
 
         mock_create_volume.return_value = {}
-        mock_get_backup_host.return_value = backup_host
         mock_fixed_looping_call.return_value = mock.MagicMock()
-
-        if driver_error:
-            fake_driver.create_volume_from_backup.side_effect = [
-                NotImplementedError]
-        fake_manager._create_from_backup(self.ctxt, volume_obj,
-                                         backup_obj.id)
-        fake_driver.create_volume_from_backup.assert_called_once_with(
-            volume_obj, backup_obj)
-        if driver_error:
-            mock_create_volume.assert_called_once_with(volume_obj)
-            mock_get_backup_host.assert_called_once_with(
-                backup_obj.host, backup_obj.availability_zone)
-            mock_restore_backup.assert_called_once_with(self.ctxt,
-                                                        backup_host,
-                                                        backup_obj,
-                                                        volume_obj['id'])
-        else:
-            fake_driver.create_volume_from_backup.assert_called_once_with(
-                volume_obj, backup_obj)
 
 
 class CreateVolumeFlowManagerGlanceCinderBackendCase(test.TestCase):
@@ -1094,8 +1065,9 @@ class CreateVolumeFlowManagerGlanceCinderBackendCase(test.TestCase):
             spec=utils.get_file_spec())
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            mock.MagicMock(), fake_db, fake_driver)
+            mock.MagicMock(), fake_db, fake_driver, fake_scheduler_api)
         fake_image_service = fake_image.FakeImageService()
 
         volume = fake_volume.fake_volume_obj(self.ctxt,
@@ -1159,8 +1131,9 @@ class CreateVolumeFlowManagerGlanceCinderBackendCase(test.TestCase):
             spec=utils.get_file_spec())
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
+        fake_scheduler_api = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
-            mock.MagicMock(), fake_db, fake_driver)
+            mock.MagicMock(), fake_db, fake_driver, fake_scheduler_api)
         fake_image_service = fake_image.FakeImageService()
 
         volume = fake_volume.fake_volume_obj(self.ctxt,
@@ -1253,10 +1226,12 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = {'virtual_size': '1073741824', 'size': 1073741824}
 
+        fake_scheduler_api = mock.MagicMock()
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1306,10 +1281,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
                       'virtual_size': '1073741824',
                       'size': 1073741824}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1367,10 +1345,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = {'virtual_size': '1073741824'}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1412,10 +1393,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = {'virtual_size': '1073741824', 'size': '1073741824'}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1443,10 +1427,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = {'virtual_size': '2147483648', 'size': 2147483648}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1476,10 +1463,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = {'virtual_size': None, 'size': 1024}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1535,10 +1525,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_meta = {'id': image_id,
                       'size': 2000000}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1604,10 +1597,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = mock.MagicMock()
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1663,10 +1659,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = {'virtual_size': '1073741824', 'size': 1073741824}
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1735,10 +1734,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_id = fakes.IMAGE_ID
         image_meta = mock.MagicMock()
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1786,10 +1788,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         mock_check_space.side_effect = exception.ImageTooBig(
             image_id=image_id, reason="fake")
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 
@@ -1841,10 +1846,13 @@ class CreateVolumeFlowManagerImageCacheTestCase(test.TestCase):
         image_location = 'someImageLocationStr'
         image_meta = mock.MagicMock()
 
+        fake_scheduler_api = mock.MagicMock()
+
         manager = create_volume_manager.CreateVolumeFromSpecTask(
             self.mock_volume_manager,
             self.mock_db,
             self.mock_driver,
+            fake_scheduler_api,
             image_volume_cache=self.mock_cache
         )
 

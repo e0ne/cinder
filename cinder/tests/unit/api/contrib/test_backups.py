@@ -511,9 +511,6 @@ class BackupsAPITestCase(test.TestCase):
 
         self.assertEqual(http_client.ACCEPTED, res.status_int)
         self.assertIn('id', res_dict['backup'])
-        _mock_service_get_all.assert_called_once_with(mock.ANY,
-                                                      disabled=False,
-                                                      topic='cinder-backup')
         self.assertTrue(mock_validate.called)
 
         volume.destroy()
@@ -625,9 +622,6 @@ class BackupsAPITestCase(test.TestCase):
 
         self.assertEqual(http_client.ACCEPTED, res.status_int)
         self.assertIn('id', res_dict['backup'])
-        _mock_service_get_all.assert_called_once_with(mock.ANY,
-                                                      disabled=False,
-                                                      topic='cinder-backup')
 
         backup.destroy()
         volume.destroy()
@@ -661,9 +655,6 @@ class BackupsAPITestCase(test.TestCase):
         res_dict = jsonutils.loads(res.body)
         self.assertEqual(http_client.ACCEPTED, res.status_int)
         self.assertIn('id', res_dict['backup'])
-        _mock_service_get_all.assert_called_once_with(mock.ANY,
-                                                      disabled=False,
-                                                      topic='cinder-backup')
         self.assertTrue(mock_validate.called)
 
         volume.destroy()
@@ -810,9 +801,6 @@ class BackupsAPITestCase(test.TestCase):
 
         self.assertEqual(http_client.ACCEPTED, res.status_int)
         self.assertIn('id', res_dict['backup'])
-        _mock_service_get_all.assert_called_once_with(mock.ANY,
-                                                      disabled=False,
-                                                      topic='cinder-backup')
         self.assertTrue(mock_validate.called)
 
         backup.destroy()
@@ -965,15 +953,10 @@ class BackupsAPITestCase(test.TestCase):
 
         res = req.get_response(fakes.wsgi_app(
             fake_auth_context=self.user_context))
-        res_dict = jsonutils.loads(res.body)
-        self.assertEqual(http_client.SERVICE_UNAVAILABLE, res.status_int)
-        self.assertEqual(http_client.SERVICE_UNAVAILABLE,
-                         res_dict['serviceUnavailable']['code'])
-        self.assertEqual('Service cinder-backup could not be found.',
-                         res_dict['serviceUnavailable']['message'])
+        self.assertEqual(http_client.ACCEPTED, res.status_int)
 
         volume.refresh()
-        self.assertEqual('available', volume.status)
+        self.assertEqual('backing-up', volume.status)
 
     @mock.patch('cinder.db.service_get_all')
     def test_create_incremental_backup_invalid_no_full(
@@ -1008,124 +991,6 @@ class BackupsAPITestCase(test.TestCase):
                          res_dict['badRequest']['message'])
 
         volume.destroy()
-
-    @mock.patch('cinder.db.service_get_all')
-    def test_is_backup_service_enabled(self, _mock_service_get_all):
-
-        testhost = 'test_host'
-        alt_host = 'strange_host'
-        empty_service = []
-        # service host not match with volume's host
-        host_not_match = [{'availability_zone': 'fake_az', 'host': alt_host,
-                           'disabled': 0, 'updated_at': timeutils.utcnow(),
-                           'uuid': 'a3a593da-7f8d-4bb7-8b4c-f2bc1e0b4824'}]
-        # service az not match with volume's az
-        az_not_match = [{'availability_zone': 'strange_az', 'host': testhost,
-                         'disabled': 0, 'updated_at': timeutils.utcnow(),
-                         'uuid': '4200b32b-0bf9-436c-86b2-0675f6ac218e'}]
-        # service disabled
-        disabled_service = []
-
-        # dead service that last reported at 20th century
-        dead_service = [{'availability_zone': 'fake_az', 'host': alt_host,
-                         'disabled': 0, 'updated_at': '1989-04-16 02:55:44',
-                        'uuid': '6d91e7f5-ca17-4e3b-bf4f-19ca77166dd7'}]
-
-        # first service's host not match but second one works.
-        multi_services = [{'availability_zone': 'fake_az', 'host': alt_host,
-                           'disabled': 0, 'updated_at': timeutils.utcnow(),
-                           'uuid': '18417850-2ca9-43d1-9619-ae16bfb0f655'},
-                          {'availability_zone': 'fake_az', 'host': testhost,
-                           'disabled': 0, 'updated_at': timeutils.utcnow(),
-                           'uuid': 'f838f35c-4035-464f-9792-ce60e390c13d'}]
-
-        # Setup mock to run through the following service cases
-        _mock_service_get_all.side_effect = [empty_service,
-                                             host_not_match,
-                                             az_not_match,
-                                             disabled_service,
-                                             dead_service,
-                                             multi_services]
-
-        volume = utils.create_volume(self.context, size=2, host=testhost)
-
-        # test empty service
-        self.assertEqual(False,
-                         self.backup_api._is_backup_service_enabled(
-                             volume.availability_zone,
-                             testhost))
-
-        # test host not match service
-        self.assertEqual(False,
-                         self.backup_api._is_backup_service_enabled(
-                             volume.availability_zone,
-                             testhost))
-
-        # test az not match service
-        self.assertEqual(False,
-                         self.backup_api._is_backup_service_enabled(
-                             volume.availability_zone,
-                             testhost))
-
-        # test disabled service
-        self.assertEqual(False,
-                         self.backup_api._is_backup_service_enabled(
-                             volume.availability_zone,
-                             testhost))
-
-        # test dead service
-        self.assertEqual(False,
-                         self.backup_api._is_backup_service_enabled(
-                             volume.availability_zone,
-                             testhost))
-
-        # test multi services and the last service matches
-        self.assertTrue(self.backup_api._is_backup_service_enabled(
-                        volume.availability_zone,
-                        testhost))
-
-    @mock.patch('cinder.db.service_get_all')
-    def test_get_available_backup_service(self, _mock_service_get_all):
-        _mock_service_get_all.return_value = [
-            {'availability_zone': 'az1', 'host': 'testhost1',
-             'disabled': 0, 'updated_at': timeutils.utcnow(),
-             'uuid': 'a3a593da-7f8d-4bb7-8b4c-f2bc1e0b4824'},
-            {'availability_zone': 'az2', 'host': 'testhost2',
-             'disabled': 0, 'updated_at': timeutils.utcnow(),
-             'uuid': '4200b32b-0bf9-436c-86b2-0675f6ac218e'},
-            {'availability_zone': 'az2', 'host': 'testhost3',
-             'disabled': 0, 'updated_at': timeutils.utcnow(),
-             'uuid': '6d91e7f5-ca17-4e3b-bf4f-19ca77166dd7'}, ]
-        actual_host = self.backup_api._get_available_backup_service_host(
-            None, 'az1')
-        self.assertEqual('testhost1', actual_host)
-        actual_host = self.backup_api._get_available_backup_service_host(
-            'testhost2', 'az2')
-        self.assertIn(actual_host, ['testhost2', 'testhost3'])
-        actual_host = self.backup_api._get_available_backup_service_host(
-            'testhost4', 'az1')
-        self.assertEqual('testhost1', actual_host)
-
-    @mock.patch('cinder.db.service_get_all')
-    def test_get_available_backup_service_with_same_host(
-            self, _mock_service_get_all):
-        _mock_service_get_all.return_value = [
-            {'availability_zone': 'az1', 'host': 'testhost1',
-             'disabled': 0, 'updated_at': timeutils.utcnow(),
-             'uuid': 'a3a593da-7f8d-4bb7-8b4c-f2bc1e0b4824'},
-            {'availability_zone': 'az2', 'host': 'testhost2',
-             'disabled': 0, 'updated_at': timeutils.utcnow(),
-             'uuid': '4200b32b-0bf9-436c-86b2-0675f6ac218e'}, ]
-        self.override_config('backup_use_same_host', True)
-        actual_host = self.backup_api._get_available_backup_service_host(
-            None, 'az1')
-        self.assertEqual('testhost1', actual_host)
-        actual_host = self.backup_api._get_available_backup_service_host(
-            'testhost2', 'az2')
-        self.assertEqual('testhost2', actual_host)
-        self.assertRaises(exception.ServiceNotFound,
-                          self.backup_api._get_available_backup_service_host,
-                          'testhost4', 'az1')
 
     @mock.patch('cinder.db.service_get_all')
     def test_delete_backup_available(self, _mock_service_get_all):
@@ -1285,14 +1150,11 @@ class BackupsAPITestCase(test.TestCase):
         res = req.get_response(fakes.wsgi_app(
             fake_auth_context=self.user_context))
 
-        self.assertEqual(http_client.NOT_FOUND, res.status_int)
+        self.assertEqual(http_client.ACCEPTED, res.status_int)
 
         backup.destroy()
 
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
-    def test_restore_backup_volume_id_specified_json(
-            self, _mock_get_backup_host):
-        _mock_get_backup_host.return_value = 'testhost'
+    def test_restore_backup_volume_id_specified_json(self):
         backup = utils.create_backup(self.context,
                                      status=fields.BackupStatus.AVAILABLE,
                                      size=1, host='testhost')
@@ -1438,10 +1300,7 @@ class BackupsAPITestCase(test.TestCase):
         self.assertEqual(http_client.ACCEPTED, res.status_int)
         self.assertEqual(backup.id, res_dict['restore']['backup_id'])
 
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
-    def test_restore_backup_name_volume_id_specified(
-            self, _mock_get_backup_host):
-        _mock_get_backup_host.return_value = 'testhost'
+    def test_restore_backup_name_volume_id_specified(self):
         backup = utils.create_backup(self.context, size=5,
                                      status=fields.BackupStatus.AVAILABLE)
         orig_vol_name = "vol-00"
@@ -1684,12 +1543,10 @@ class BackupsAPITestCase(test.TestCase):
         volume.destroy()
         backup.destroy()
 
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
-    def test_restore_backup_to_oversized_volume(self, _mock_get_backup_host):
+    def test_restore_backup_to_oversized_volume(self):
         backup = utils.create_backup(self.context,
                                      status=fields.BackupStatus.AVAILABLE,
                                      size=10)
-        _mock_get_backup_host.return_value = 'testhost'
         # need to create the volume referenced below first
         volume_name = 'test1'
         volume = utils.create_volume(self.context, size=15,
@@ -1713,10 +1570,8 @@ class BackupsAPITestCase(test.TestCase):
         volume.destroy()
         backup.destroy()
 
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.restore_backup')
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
-    def test_restore_backup_with_different_host(self, _mock_get_backup_host,
-                                                mock_restore_backup):
+    @mock.patch('cinder.scheduler.rpcapi.SchedulerAPI.restore_backup')
+    def test_restore_backup_with_different_host(self, mock_restore_backup):
         volume_name = 'test1'
         backup = utils.create_backup(self.context,
                                      status=fields.BackupStatus.AVAILABLE,
@@ -1725,7 +1580,6 @@ class BackupsAPITestCase(test.TestCase):
                                      host='HostB@BackendB#PoolB',
                                      display_name=volume_name)
 
-        _mock_get_backup_host.return_value = 'testhost'
         body = {"restore": {"volume_id": volume.id, }}
         req = webob.Request.blank('/v2/%s/backups/%s/restore' % (
                                   fake.PROJECT_ID, backup.id))
@@ -1740,10 +1594,11 @@ class BackupsAPITestCase(test.TestCase):
         self.assertEqual(backup.id, res_dict['restore']['backup_id'])
         self.assertEqual(volume.id, res_dict['restore']['volume_id'])
         self.assertEqual(volume_name, res_dict['restore']['volume_name'])
-        mock_restore_backup.assert_called_once_with(mock.ANY, u'testhost',
-                                                    mock.ANY, volume.id)
+        backup.restore_volume_id = volume.id
+        backup.status = fields.BackupStatus.RESTORING
+        mock_restore_backup.assert_called_once()
         # Manually check if restore_backup was called with appropriate backup.
-        self.assertEqual(backup.id, mock_restore_backup.call_args[0][2].id)
+        self.assertEqual(backup.id, mock_restore_backup.call_args[0][1].id)
 
         volume.destroy()
         backup.destroy()
@@ -1762,11 +1617,9 @@ class BackupsAPITestCase(test.TestCase):
         # request is not authorized
         self.assertEqual(http_client.FORBIDDEN, res.status_int)
 
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.export_record')
+    @mock.patch('cinder.scheduler.rpcapi.SchedulerAPI.export_backup')
     def test_export_backup_record_id_specified_json(self,
-                                                    _mock_export_record_rpc,
-                                                    _mock_get_backup_host):
+                                                    _mock_export_record_rpc):
         backup = utils.create_backup(self.context,
                                      status=fields.BackupStatus.AVAILABLE,
                                      size=10)
@@ -1777,7 +1630,6 @@ class BackupsAPITestCase(test.TestCase):
         _mock_export_record_rpc.return_value = \
             {'backup_service': backup_service,
              'backup_url': backup_url}
-        _mock_get_backup_host.return_value = 'testhost'
         req = webob.Request.blank('/v2/%s/backups/%s/export_record' % (
                                   fake.PROJECT_ID, backup.id))
         req.method = 'GET'
@@ -1832,15 +1684,12 @@ class BackupsAPITestCase(test.TestCase):
                          res_dict['badRequest']['message'])
         backup.destroy()
 
-    @mock.patch('cinder.backup.api.API._get_available_backup_service_host')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.export_record')
+    @mock.patch('cinder.scheduler.rpcapi.SchedulerAPI.export_backup')
     def test_export_record_with_unavailable_service(self,
-                                                    _mock_export_record_rpc,
-                                                    _mock_get_backup_host):
+                                                    _mock_export_record_rpc):
         msg = 'fake unavailable service'
         _mock_export_record_rpc.side_effect = \
             exception.InvalidBackup(reason=msg)
-        _mock_get_backup_host.return_value = 'testhost'
         backup = utils.create_backup(self.context,
                                      status=fields.BackupStatus.AVAILABLE)
         ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
@@ -1876,11 +1725,9 @@ class BackupsAPITestCase(test.TestCase):
         # request is not authorized
         self.assertEqual(http_client.FORBIDDEN, res.status_int)
 
-    @mock.patch('cinder.backup.api.API._list_backup_hosts')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.import_record')
+    @mock.patch('cinder.scheduler.rpcapi.SchedulerAPI.import_backup')
     def test_import_record_volume_id_specified_json(self,
-                                                    _mock_import_record_rpc,
-                                                    _mock_list_services):
+                                                    _mock_import_record_rpc):
         utils.replace_obj_loader(self, objects.Backup)
         project_id = fake.PROJECT_ID
         backup_service = 'fake'
@@ -1890,7 +1737,6 @@ class BackupsAPITestCase(test.TestCase):
                                 status=fields.BackupStatus.AVAILABLE)
         backup_url = backup.encode_record()
         _mock_import_record_rpc.return_value = None
-        _mock_list_services.return_value = [backup_service]
 
         req = webob.Request.blank('/v2/%s/backups/import_record' %
                                   fake.PROJECT_ID)
@@ -1915,11 +1761,9 @@ class BackupsAPITestCase(test.TestCase):
         self.assertEqual(backup_api.IMPORT_VOLUME_ID, db_backup.volume_id)
         self.assertEqual(fields.BackupStatus.CREATING, db_backup.status)
 
-    @mock.patch('cinder.backup.api.API._list_backup_hosts')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.import_record')
+    @mock.patch('cinder.scheduler.rpcapi.SchedulerAPI.import_backup')
     def test_import_record_volume_id_exists_deleted(self,
-                                                    _mock_import_record_rpc,
-                                                    _mock_list_services):
+                                                    _mock_import_record_rpc):
         ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
                                      is_admin=True)
         utils.replace_obj_loader(self, objects.Backup)
@@ -1935,7 +1779,6 @@ class BackupsAPITestCase(test.TestCase):
                                          status=fields.BackupStatus.DELETED)
         backup_service = 'fake'
         _mock_import_record_rpc.return_value = None
-        _mock_list_services.return_value = [backup_service]
 
         req = webob.Request.blank('/v2/%s/backups/import_record' %
                                   fake.PROJECT_ID)
@@ -1962,39 +1805,11 @@ class BackupsAPITestCase(test.TestCase):
 
         backup_del.destroy()
 
-    @mock.patch('cinder.backup.api.API._list_backup_hosts')
-    def test_import_record_with_no_backup_services(self,
-                                                   _mock_list_services):
+    def test_import_backup_with_wrong_backup_url(self):
         ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
                                      is_admin=True)
         backup_service = 'fake'
         backup_url = 'fake'
-        _mock_list_services.return_value = []
-
-        req = webob.Request.blank('/v2/%s/backups/import_record' %
-                                  fake.PROJECT_ID)
-        body = {'backup-record': {'backup_service': backup_service,
-                                  'backup_url': backup_url}}
-        req.body = jsonutils.dump_as_bytes(body)
-        req.method = 'POST'
-        req.headers['content-type'] = 'application/json'
-
-        res = req.get_response(fakes.wsgi_app(fake_auth_context=ctx))
-        res_dict = jsonutils.loads(res.body)
-        self.assertEqual(http_client.SERVICE_UNAVAILABLE, res.status_int)
-        self.assertEqual(http_client.SERVICE_UNAVAILABLE,
-                         res_dict['serviceUnavailable']['code'])
-        self.assertEqual('Service %s could not be found.'
-                         % backup_service,
-                         res_dict['serviceUnavailable']['message'])
-
-    @mock.patch('cinder.backup.api.API._list_backup_hosts')
-    def test_import_backup_with_wrong_backup_url(self, _mock_list_services):
-        ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
-                                     is_admin=True)
-        backup_service = 'fake'
-        backup_url = 'fake'
-        _mock_list_services.return_value = ['no-match1', 'no-match2']
         req = webob.Request.blank('/v2/%s/backups/import_record' %
                                   fake.PROJECT_ID)
         body = {'backup-record': {'backup_service': backup_service,
@@ -2011,15 +1826,12 @@ class BackupsAPITestCase(test.TestCase):
         self.assertEqual("Invalid input received: Can't parse backup record.",
                          res_dict['badRequest']['message'])
 
-    @mock.patch('cinder.backup.api.API._list_backup_hosts')
-    def test_import_backup_with_existing_backup_record(self,
-                                                       _mock_list_services):
+    def test_import_backup_with_existing_backup_record(self):
         ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
                                      is_admin=True)
         backup = utils.create_backup(self.context, fake.VOLUME_ID)
         backup_service = 'fake'
         backup_url = backup.encode_record()
-        _mock_list_services.return_value = ['no-match1', 'no-match2']
         req = webob.Request.blank('/v2/%s/backups/import_record' %
                                   fake.PROJECT_ID)
         body = {'backup-record': {'backup_service': backup_service,
@@ -2038,18 +1850,15 @@ class BackupsAPITestCase(test.TestCase):
 
         backup.destroy()
 
-    @mock.patch('cinder.backup.api.API._list_backup_hosts')
-    @mock.patch('cinder.backup.rpcapi.BackupAPI.import_record')
+    @mock.patch('cinder.scheduler.rpcapi.SchedulerAPI.import_backup')
     def test_import_backup_with_missing_backup_services(self,
-                                                        _mock_import_record,
-                                                        _mock_list_services):
+                                                        _mock_import_record):
         ctx = context.RequestContext(fake.USER_ID, fake.PROJECT_ID,
                                      is_admin=True)
         backup = utils.create_backup(self.context, fake.VOLUME_ID,
                                      status=fields.BackupStatus.DELETED)
         backup_service = 'fake'
         backup_url = backup.encode_record()
-        _mock_list_services.return_value = ['no-match1', 'no-match2']
         _mock_import_record.side_effect = \
             exception.ServiceNotFound(service_id='fake')
         req = webob.Request.blank('/v2/%s/backups/import_record' %
