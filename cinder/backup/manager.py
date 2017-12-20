@@ -339,7 +339,8 @@ class BackupManager(manager.SchedulerDependentManager):
                     'actual_status': actual_status,
                 }
                 self._update_backup_error(backup, err)
-                raise exception.InvalidSnapshot(reason=err)
+                return
+                # raise exception.InvalidSnapshot(reason=err)
         else:
             actual_status = volume['status']
             if actual_status != expected_status:
@@ -349,7 +350,8 @@ class BackupManager(manager.SchedulerDependentManager):
                     'actual_status': actual_status,
                 }
                 self._update_backup_error(backup, err)
-                raise exception.InvalidVolume(reason=err)
+                # raise exception.InvalidVolume(reason=err)
+                return
 
         expected_status = fields.BackupStatus.CREATING
         actual_status = backup.status
@@ -360,14 +362,16 @@ class BackupManager(manager.SchedulerDependentManager):
                 'actual_status': actual_status,
             }
             self._update_backup_error(backup, err)
-            backup.save()
-            raise exception.InvalidBackup(reason=err)
+            # backup.save()
+            # raise exception.InvalidBackup(reason=err)
+            return
 
         try:
             if not self.is_working():
                 err = _('Create backup aborted due to backup service is down')
                 self._update_backup_error(backup, err)
-                raise exception.InvalidBackup(reason=err)
+                # raise exception.InvalidBackup(reason=err)
+                return
             updates = self._run_backup(context, backup, volume)
         except Exception as err:
             with excutils.save_and_reraise_exception():
@@ -470,7 +474,10 @@ class BackupManager(manager.SchedulerDependentManager):
             backup.save()
             self.db.volume_update(context, volume_id,
                                   {'status': 'error_restoring'})
-            raise exception.InvalidVolume(reason=err)
+            LOG.error(err)
+            # self._update_backup_error(backup, err)
+            return
+            # raise exception.InvalidVolume(reason=err)
 
         expected_status = fields.BackupStatus.RESTORING
         actual_status = backup['status']
@@ -481,7 +488,8 @@ class BackupManager(manager.SchedulerDependentManager):
                     'actual_status': actual_status})
             self._update_backup_error(backup, err)
             self.db.volume_update(context, volume_id, {'status': 'error'})
-            raise exception.InvalidBackup(reason=err)
+            return
+            # raise exception.InvalidBackup(reason=err)
 
         if volume['size'] > backup['size']:
             LOG.info('Volume: %(vol_id)s, size: %(vol_size)d is '
@@ -509,7 +517,8 @@ class BackupManager(manager.SchedulerDependentManager):
             backup.status = fields.BackupStatus.AVAILABLE
             backup.save()
             self.db.volume_update(context, volume_id, {'status': 'error'})
-            raise exception.InvalidBackup(reason=err)
+            return
+            # raise exception.InvalidBackup(reason=err)
 
         try:
             self._run_restore(context, backup, volume)
@@ -571,13 +580,15 @@ class BackupManager(manager.SchedulerDependentManager):
                 % {'expected_status': expected_status,
                    'actual_status': actual_status}
             self._update_backup_error(backup, err)
-            raise exception.InvalidBackup(reason=err)
+            return
+            # raise exception.InvalidBackup(reason=err)
 
         if not self.is_working():
             err = _('Delete backup is aborted due to backup service is down')
             status = fields.BackupStatus.ERROR_DELETING
             self._update_backup_error(backup, err, status)
-            raise exception.InvalidBackup(reason=err)
+            # raise exception.InvalidBackup(reason=err)
+            return
 
         backup_service = self._map_service_to_driver(backup['service'])
         if backup_service is not None:
@@ -594,7 +605,8 @@ class BackupManager(manager.SchedulerDependentManager):
                     % {'configured_service': configured_service,
                        'backup_service': backup_service}
                 self._update_backup_error(backup, err)
-                raise exception.InvalidBackup(reason=err)
+                # raise exception.InvalidBackup(reason=err)
+                return
 
             try:
                 backup_service = self.get_backup_driver(context)
